@@ -34,9 +34,10 @@ Formato: `tipo/descricao-curta`. Usar letras minúsculas, palavras separadas por
 1. Atualizar a `develop` local: `git checkout develop` e `git pull`.
 2. Criar a branch da tarefa a partir dela: `git checkout -b feat/nome-da-tarefa`.
 3. Fazer commits pequenos e frequentes, seguindo a seção 2.
-4. Enviar a branch: `git push -u origin feat/nome-da-tarefa`.
-5. Abrir um Pull Request para a `develop`, seguindo a seção 3.
-6. Depois do merge, apagar a branch de trabalho (no GitHub e localmente).
+4. Antes de abrir o PR, trazer para a branch o que entrou na `develop` enquanto se trabalhava: `git pull origin develop`. Conflitos são resolvidos na própria branch, nunca na `develop`.
+5. Enviar a branch: `git push -u origin feat/nome-da-tarefa`.
+6. Abrir um Pull Request para a `develop`, seguindo a seção 3.
+7. Depois do merge, apagar a branch de trabalho no GitHub (botão "Delete branch" do PR) e localmente: `git checkout develop`, `git pull` e `git branch -d feat/nome-da-tarefa`.
 
 A cada entrega ou apresentação, abre-se um PR da `develop` para a `main`, e a versão recebe uma tag (seção 4).
 
@@ -48,11 +49,17 @@ Formato:
 
 ```
 tipo(escopo): descrição
+
+corpo (opcional)
+
+rodapé (opcional)
 ```
 
 - **tipo:** obrigatório, um dos listados abaixo.
 - **escopo:** opcional; indica a parte do sistema afetada.
-- **descrição:** obrigatória. Em português, no imperativo ("adiciona", "corrige"), começando com letra minúscula, sem ponto final e com até 72 caracteres.
+- **descrição:** obrigatória. Em português, no imperativo ("adiciona", "corrige"), começando com letra minúscula e sem ponto final. A primeira linha inteira (tipo, escopo e descrição) tem até 72 caracteres.
+- **corpo:** opcional, separado por uma linha em branco. Explica o porquê da mudança quando a descrição não basta.
+- **rodapé:** opcional, separado por uma linha em branco. Liga o commit a um issue (`Refs #12`) ou registra coautoria (seção 2.1).
 
 ### Tipos
 
@@ -65,10 +72,13 @@ tipo(escopo): descrição
 | `refactor` | Mudança de código que não altera o comportamento |
 | `style` | Formatação, espaços, ponto e vírgula (sem mudança de lógica) |
 | `chore` | Configuração, dependências, scripts de build |
+| `ci` | Integração contínua (GitHub Actions) |
 
 ### Escopos do projeto
 
-`pesquisa`, `dashboard`, `tvwall`, `ouvidoria`, `admin`, `auth`, `api`, `db`, `docs`
+`pesquisa`, `dashboard`, `tvwall`, `ouvidoria`, `admin`, `auth`, `api`, `db`
+
+Mudanças só de documentação usam o tipo `docs` sem escopo.
 
 ### Exemplos
 
@@ -87,6 +97,20 @@ chore: configura variáveis de ambiente do banco
 - Não fazer commit de código que não roda.
 - Nunca fazer commit de senhas, tokens ou do arquivo `.env`. Esses dados ficam fora do repositório, listados no `.gitignore`, e o modelo de configuração fica em `.env.example`.
 
+### 2.1 Coautoria
+
+Quando as duas integrantes constroem juntas uma mudança (por exemplo, programando lado a lado ou transformando juntas uma tela do Figma em componente), o commit registra as duas autoras. Quem faz o commit acrescenta, no rodapé, a linha `Co-authored-by` da outra integrante, e o GitHub passa a mostrar as duas no commit:
+
+```
+feat(pesquisa): adiciona tela de escolha das etapas
+
+Co-authored-by: Maria Luiza Altenhofen Loth <altenhofen.loth@gmail.com>
+```
+
+Pela linha de comando: `git commit -m "feat(pesquisa): adiciona tela de escolha das etapas" -m "Co-authored-by: Maria Luiza Altenhofen Loth <altenhofen.loth@gmail.com>"`.
+
+A coautoria só é usada quando houve participação real na mudança. O e-mail precisa ser o mesmo cadastrado na conta do GitHub da coautora, senão ela não aparece no commit.
+
 ---
 
 ## 3. Pull Requests e revisão de código
@@ -94,8 +118,9 @@ chore: configura variáveis de ambiente do banco
 ### Regras
 
 - Ninguém faz push direto na `main` ou na `develop`; toda mudança entra por Pull Request.
-- **Ninguém faz merge do próprio PR.** O outro integrante revisa e aprova antes.
-- Cada PR corresponde a uma tarefa do Kanban.
+- **Ninguém faz merge do próprio PR.** O outro integrante revisa e aprova antes, pelo botão **Approve** da aba "Files changed".
+- As regras acima são garantidas pelo GitHub: a `main` e a `develop` são branches protegidas, que recusam push direto e só liberam o merge depois de 1 aprovação.
+- Cada PR corresponde a uma tarefa do Kanban. A descrição usa `Closes #número` para que o issue seja fechado sozinho no merge.
 - PRs devem ser pequenos. Uma funcionalidade grande é dividida em partes.
 - O merge é feito com **Create a merge commit**, para preservar os commits individuais de cada integrante no histórico.
 
@@ -105,12 +130,14 @@ Mesmo formato dos commits. Exemplo: `feat(dashboard): adiciona gráfico de satis
 
 ### Descrição (modelo)
 
+O modelo abaixo está em `.github/pull_request_template.md`, e o GitHub o preenche sozinho ao abrir um PR.
+
 ```
 ## O que foi feito
 Resumo das mudanças.
 
 ## Tarefa relacionada
-Link ou nome do card no Kanban. Usar "Closes #número" quando houver issue.
+Closes #número
 
 ## Como testar
 Passos para o revisor verificar a mudança.
@@ -148,6 +175,10 @@ git pull
 git tag -a v1.0.0 -m "Entrega final"
 git push origin v1.0.0
 ```
+
+Depois de criada, a tag também vira uma **Release** no GitHub (aba "Releases" → "Draft a new release"), com o resumo do que a versão entrega.
+
+Se um erro for encontrado depois de uma entrega, a correção segue o fluxo normal (`fix/` a partir da `develop`, PR para a `develop` e depois para a `main`), e a versão sobe o último número: `v1.0.0` → `v1.0.1`.
 
 ---
 
