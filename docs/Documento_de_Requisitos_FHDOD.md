@@ -3,7 +3,7 @@
 **Cliente:** Fundação Hospitalar Dr. Oswaldo Diesel (FHDOD), Três Coroas/RS — Ouvidoria
 **Responsáveis:** Maria Luiza Altenhofen Loth e Sara Amabili Castilhos
 **Projeto:** Projeto Integrador 2026/2 — Curso Técnico em Informática
-**Versão:** 1.8 — 14/10/2026
+**Versão:** 1.9 — 20/10/2026
 
 ---
 
@@ -96,7 +96,7 @@ O hospital definiu no briefing dois níveis de administração. As funções de 
 
 **Premissas**
 
-- O hospital fornece a lista de setores, os horários dos turnos, a escala mensal e o número mensal de atendimentos por setor.
+- O hospital fornece a lista de setores, os horários dos turnos, as equipes de cada setor, a escala mensal e o número mensal de atendimentos por setor.
 - Os tablets de 10 polegadas dos setores e a rede do hospital têm acesso estável à internet.
 - A Ouvidoria define o texto dos termos de privacidade e as perguntas de cada setor.
 
@@ -139,8 +139,8 @@ Os requisitos funcionais descrevem as ações e serviços que o sistema deve exe
 
 | ID | Requisito Funcional | Detalhamento / Critério de aceitação | Prioridade |
 | --- | --- | --- | --- |
-| **RF20** | O Super Admin deve gerenciar setores, turnos e gestores. | Cria, edita e desativa. Cada gestor recebe um ou mais setores. | Essencial |
-| **RF21** | O Super Admin deve importar a escala mensal por planilha Excel. | Cada linha: setor + data + turno + equipe. | Essencial |
+| **RF20** | O Super Admin deve gerenciar setores, turnos, equipes e gestores. | Cria, edita e desativa. Cada equipe pertence a um setor. Cada gestor recebe um ou mais setores. | Essencial |
+| **RF21** | O Super Admin deve importar a escala mensal por planilha Excel. | Cada linha: setor + data + turno + equipe. A importação só aceita equipes cadastradas e ativas no setor da linha; se alguma linha tiver erro, nada é gravado e o sistema indica as linhas a corrigir. | Essencial |
 | **RF22** | O Super Admin deve gerenciar todas as perguntas; o Gestor, as perguntas dos seus setores. | Cadastrar, editar, ordenar e ativar/desativar. Tipos: rostinhos (1 a 5), escala (0 a 10), sim/não, múltipla escolha e data e período do atendimento. | Essencial |
 | **RF23** | As perguntas não podem ser removidas, apenas desativadas. | Pergunta desativada sai da pesquisa, mas suas respostas continuam nos relatórios. | Essencial |
 | **RF24** | O Super Admin deve definir o texto dos termos de privacidade. | Os termos ficam em link na pesquisa. | Importante |
@@ -206,7 +206,7 @@ Regras de negócio são condições que restringem ou orientam a execução das 
 | --- | --- |
 | Aumentar a adesão às respostas | RF02–RF06, RF08, RF12, RF30, RNF05 |
 | Saber setor, data e turno de cada resposta | RF01, RF02, RN02, RN03 |
-| Identificar a equipe sem culpar um profissional | RF21, RF28, RN04 |
+| Identificar a equipe sem culpar um profissional | RF20, RF21, RF28, RN04 |
 | Responder pelo celular e pelo tablet do setor | RF01, RF12, RNF03 |
 | Não perguntar o que o paciente não viveu | RF06, RF22 |
 | Não perder respostas de quem desiste no meio | RF07, RN01 |
