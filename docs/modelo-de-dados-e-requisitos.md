@@ -1,7 +1,7 @@
 # Modelo de Dados e Requisitos — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md), versão 1.9
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md), versão 1.10
 
 Este documento define como os dados do sistema são organizados no banco: a escolha do tipo de banco, as entidades e seus relacionamentos, o dicionário de dados, as regras de integridade e a ligação de cada tabela aos requisitos. Ele é a base do `schema.prisma`, dos scripts de criação e povoamento e da camada de repositórios do backend.
 
@@ -151,6 +151,9 @@ Exemplo com um turno cadastrado das 19h às 7h: a pessoa atendida às 2h do dia 
 
 Como os turnos mudam com o tempo, a sessão guarda o **turno** (`turno_id`), e não o horário. Alterar o horário de um turno vale só para as sessões novas; as antigas continuam classificadas no turno em que foram registradas.
 
+**D14 — O tipo da manifestação da pesquisa começa vazio.**
+Quem classifica a manifestação é a Ouvidoria, não o paciente (RN12): o paciente tende a escolher o tipo pelo sentimento, e uma "sugestão" pode ser uma reclamação grave. Por isso `manifestacao.tipo` aceita vazio, e vazio significa "a classificar". A alternativa seria um valor `NAO_CLASSIFICADA` no tipo enumerado, mas isso misturaria "ainda não se sabe" com os tipos de verdade e exigiria excluí-lo de toda contagem por tipo. Duas restrições `CHECK` garantem a regra: só a origem `PESQUISA` chega sem tipo, e nenhum chamado é finalizado sem tipo. Assim, os indicadores por tipo (RF27) só ficam com a categoria "a classificar" enquanto o chamado está aberto.
+
 ---
 
 ## 5. Dicionário de dados
@@ -165,7 +168,7 @@ Convenções das tabelas: **Nulo** indica se a coluna aceita valor vazio; **PK**
 | `tipo_pergunta` | `ROSTINHO`, `ESCALA`, `SIM_NAO`, `MULTIPLA_ESCOLHA`, `DATA_PERIODO` | Tipos de pergunta (RF22) |
 | `canal_resposta` | `CELULAR`, `TABLET` | Canal da sessão (RF02) |
 | `origem_turno` | `INFORMADO`, `CALCULADO` | Como o turno da sessão foi obtido (RN03) |
-| `tipo_manifestacao` | `ELOGIO`, `RECLAMACAO`, `SUGESTAO` | Tipo da manifestação (RF09) |
+| `tipo_manifestacao` | `ELOGIO`, `RECLAMACAO`, `SUGESTAO` | Tipo da manifestação, definido pela Ouvidoria (RN12, D14) |
 | `origem_manifestacao` | `PESQUISA`, `TELEFONE`, `PRESENCIAL`, `EMAIL`, `PAPEL` | Canal da manifestação (RF17) |
 | `status_manifestacao` | `NOVA`, `EM_CONTATO`, `ENCERRADA`, `SEM_RETORNO` | Situação do chamado (RF15) |
 | `resultado_contato` | `CONTATO_REALIZADO`, `SEM_SUCESSO` | Resultado de cada tentativa (RF15) |
@@ -444,7 +447,7 @@ Elogio, reclamação ou sugestão, vinda da pesquisa ou de outro canal. Cada uma
 | `origem` | `origem_manifestacao` | Não | | Pesquisa ou outro canal (RF17) |
 | `sessao_id` | `UUID` | Sim | FK → `sessao`; `CHECK ((origem = 'PESQUISA') = (sessao_id IS NOT NULL))` | Sessão de origem; vazio nos outros canais |
 | `registrada_por_id` | `INTEGER` | Sim | FK → `usuario`; `CHECK ((origem = 'PESQUISA') = (registrada_por_id IS NULL))` | Super Admin que registrou (outros canais) |
-| `tipo` | `tipo_manifestacao` | Não | | Elogio, reclamação ou sugestão |
+| `tipo` | `tipo_manifestacao` | Sim | `CHECK (origem = 'PESQUISA' OR tipo IS NOT NULL)` | Elogio, reclamação ou sugestão, definido pela Ouvidoria; vazio = a classificar (RN12, D14) |
 | `setor_id` | `INTEGER` | Não | FK → `setor` | Setor envolvido |
 | `etapa_id` | `INTEGER` | Sim | FK → `etapa` | Etapa indicada pelo paciente (RF09) |
 | `data_ocorrencia` | `DATE` | Não | | Data do atendimento |
@@ -481,11 +484,14 @@ CHECK ((status IN ('ENCERRADA', 'SEM_RETORNO')) = (finalizada_em IS NOT NULL))
 -- ...e finalizar exige desfecho e apaga o telefone e o hash
 CHECK (finalizada_em IS NULL OR (desfecho IS NOT NULL AND telefone_cifrado IS NULL AND telefone_hash IS NULL))
 
+-- RN12: só se finaliza um chamado já classificado pela Ouvidoria (D14)
+CHECK (finalizada_em IS NULL OR tipo IS NOT NULL)
+
 -- RF18: só elogios vão para o TV Wall, sempre com o texto aprovado
 CHECK (aprovada_tv_wall_em IS NULL OR (tipo = 'ELOGIO' AND texto_tv_wall IS NOT NULL AND aprovada_tv_wall_por_id IS NOT NULL))
 ```
 
-Na origem `PESQUISA`, `setor_id`, `data_ocorrencia` e `turno_id` são copiados da sessão ao criar a manifestação. Essa repetição é intencional: manifestações de outros canais não têm sessão, e com as colunas na própria tabela a lista da Ouvidoria (RF14) filtra os dois casos da mesma forma. A nota exibida nessa lista vem da sessão; manifestações de outros canais não têm nota.
+Na origem `PESQUISA`, `setor_id`, `data_ocorrencia` e `turno_id` são copiados da sessão ao criar a manifestação, e o `tipo` fica vazio até a Ouvidoria classificá-la (D14). Essa repetição é intencional: manifestações de outros canais não têm sessão, e com as colunas na própria tabela a lista da Ouvidoria (RF14) filtra os dois casos da mesma forma. A nota exibida nessa lista vem da sessão; manifestações de outros canais não têm nota.
 
 Nos outros canais, quando o paciente deixa telefone, o Super Admin registra o consentimento obtido no contato (por exemplo, por telefone), vinculado à versão vigente dos termos. As restrições valem igualmente para os dois casos.
 
@@ -566,6 +572,7 @@ As regras ficam no banco sempre que podem ser expressas em uma única tabela. As
 | Primeira pergunta da etapa é rostinho (RF04) | — | Validação ao ordenar e ativar |
 | Telefone só com consentimento (RN06) | `CHECK` | Fluxo de confirmação do RF10 |
 | Finalizar exige desfecho e apaga o telefone (RN07) | `CHECK` | Transação: status, anonimização e log juntos |
+| Tipo definido pela Ouvidoria; só a pesquisa chega sem tipo e só se finaliza com tipo (RN12, D14) | `CHECK` | A rota pública não aceita tipo; classificação com log (RNF11) |
 | "Sem retorno" após 3 tentativas (RF15) | — | Contagem das tentativas |
 | Gestor só vê os seus setores (RNF10) | — | Filtro por `gestor_setor` em toda consulta |
 | Turnos cobrem as 24 horas (D2) | — | Validação ao salvar turnos |
@@ -591,7 +598,7 @@ O Prisma não descreve restrições `CHECK` no `schema.prisma`. Elas serão acre
 | Taxa de adesão (RF25) | Sessões completas ÷ `quantidade` do mês e setor; sem atendimentos informados, exibe "atendimentos não informados" | `sessao`, `atendimento_mensal` |
 | Avaliação por etapa | Média das respostas de rostinho (1 a 5) de cada etapa, incluindo sessões incompletas (RN01) | `resposta`, `pergunta` |
 | Avaliação por equipe | Nota média das sessões ligadas à equipe pela escala (D3) | `sessao`, `escala`, `equipe` |
-| Manifestações por tipo | Contagem por `tipo` | `manifestacao` |
+| Manifestações por tipo | Contagem por `tipo`; as que têm `tipo` vazio formam a categoria "a classificar" (D14) | `manifestacao` |
 
 **Toda resposta válida conta na análise do hospital.** Uma sessão interrompida no meio entra no total de respostas e nos indicadores das etapas e perguntas que o paciente respondeu. Só não entra na nota média, no NPS e na distribuição das notas, porque esses indicadores são calculados a partir da própria nota geral, que ela não tem. Pela mesma razão, a taxa de adesão usa as respostas completas, como define o RF27. Sessões abertas sem nenhuma resposta não contam.
 
@@ -677,7 +684,7 @@ Nesse cenário, o banco cresce cerca de 150 MB por ano. O limite de armazenament
 | RF06 — Etapas vividas | `etapa`, `sessao_etapa`, `pergunta.etapa_id` |
 | RF07, RN01 — Respostas acumulativas | `resposta` gravada a cada pergunta, sem exclusão (D6) |
 | RF08, RN05 — Final conforme a nota | `sessao.nota_geral`, `manifestacao` |
-| RF09 — Elogio, reclamação ou sugestão | `manifestacao.tipo`, `etapa_id`, `profissional_citado` |
+| RF09 — Espaço para elogio, reclamação ou sugestão | `manifestacao.texto`, `etapa_id`, `profissional_citado` |
 | RF10, RN06 — Anônimo ou telefone com consentimento | `manifestacao.pediu_retorno`, `telefone_*`, `termo_privacidade_id`, `consentimento_em` |
 | RF13 — Sem duplicatas, sessão retomável | UUID da sessão, restrição única em `resposta`, `localStorage` (D11) |
 | RF14 — Lista de manifestações com filtros | `manifestacao` e seus índices |
@@ -695,12 +702,13 @@ Nesse cenário, o banco cresce cerca de 150 MB por ano. O limite de armazenament
 | RF27–RF30 — Indicadores, exportação e TV Wall | Consultas da seção 7; nenhuma tabela própria |
 | RN03 — Data e turno informados ou calculados | `sessao.data_atendimento`, `turno_id`, `turno_origem` (D2) |
 | RN07, RNF12 — Finalização e anonimização | `CHECK` de finalização em `manifestacao` (D7) |
+| RN12 — Tipo definido pela Ouvidoria | `manifestacao.tipo` vazio até a classificação (D14) |
 | RNF08 — Rotas públicas protegidas por sessão | `sessao.id` como UUID (D10) |
 | RNF09 — Senhas com bcrypt | `usuario.senha_hash` |
 | RNF10 — Telefone cifrado e hash separado | `manifestacao.telefone_cifrado`, `telefone_hash` (D7) |
 | RNF11 — Log de alterações | `log_auditoria` |
 
-RF05 (sem contador de perguntas), RF11 (tela de agradecimento) e RF12 (QR Code para responder em casa) tratam só da interface e não exigem dados próprios. Do RF12, o modelo só precisa garantir que a resposta dada em casa seja contada no dia do atendimento, o que a seção 7.1 explica.
+RF05 (sem contador de perguntas), RF11 (tela de agradecimento) e RF12 (QR Code para responder em casa) tratam só da interface e não exigem dados próprios. Do RF12, o modelo só precisa garantir que a resposta dada em casa seja contada no dia do atendimento, o que a seção 7.1 explica. O QR Code do TV Wall (RF30) também não exige dados próprios: o setor da área de espera vem do endereço da tela, e o QR Code usa o `slug` desse setor.
 
 ---
 
