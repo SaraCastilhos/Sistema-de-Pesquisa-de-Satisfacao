@@ -1,0 +1,454 @@
+// Modelo de dados do sistema (docs/modelo-de-dados-e-requisitos.md, seção 5).
+// Convenções em docs/padroes-banco-de-dados.md: snake_case no banco, camelCase no código.
+// As restrições CHECK não cabem aqui: ficam no migration.sql (seção 6 do modelo).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tipos enumerados (seção 5.1)
+// ---------------------------------------------------------------------------
+
+enum PerfilUsuario {
+  SUPER_ADMIN
+  GESTOR
+
+  @@map("perfil_usuario")
+}
+
+enum TipoPergunta {
+  ROSTINHO
+  ESCALA
+  SIM_NAO
+  MULTIPLA_ESCOLHA
+  DATA_PERIODO
+
+  @@map("tipo_pergunta")
+}
+
+enum CanalResposta {
+  CELULAR
+  TABLET
+
+  @@map("canal_resposta")
+}
+
+enum OrigemTurno {
+  INFORMADO
+  CALCULADO
+
+  @@map("origem_turno")
+}
+
+enum TipoManifestacao {
+  ELOGIO
+  RECLAMACAO
+  SUGESTAO
+
+  @@map("tipo_manifestacao")
+}
+
+enum OrigemManifestacao {
+  PESQUISA
+  TELEFONE
+  PRESENCIAL
+  EMAIL
+  PAPEL
+
+  @@map("origem_manifestacao")
+}
+
+enum StatusManifestacao {
+  NOVA
+  EM_CONTATO
+  ENCERRADA
+  SEM_RETORNO
+
+  @@map("status_manifestacao")
+}
+
+enum ResultadoContato {
+  CONTATO_REALIZADO
+  SEM_SUCESSO
+
+  @@map("resultado_contato")
+}
+
+enum AcaoAuditoria {
+  CRIACAO
+  ALTERACAO
+  DESATIVACAO
+  ANONIMIZACAO
+
+  @@map("acao_auditoria")
+}
+
+// ---------------------------------------------------------------------------
+// Acesso (seção 5.2)
+// ---------------------------------------------------------------------------
+
+model Usuario {
+  id           Int           @id @default(autoincrement())
+  nome         String        @db.VarChar(120)
+  email        String        @unique @db.VarChar(254)
+  senhaHash    String        @map("senha_hash") @db.Char(60)
+  perfil       PerfilUsuario
+  ativo        Boolean       @default(true)
+  criadoEm     DateTime      @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm DateTime      @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  setores                  GestorSetor[]
+  logs                     LogAuditoria[]
+  escalasImportadas        Escala[]
+  atendimentosInformados   AtendimentoMensal[]
+  termosCriados            TermoPrivacidade[]
+  manifestacoesRegistradas Manifestacao[]      @relation("ManifestacaoRegistradaPor")
+  manifestacoesAprovadas   Manifestacao[]      @relation("ManifestacaoAprovadaTvWallPor")
+  tentativasContato        TentativaContato[]
+  anexosEnviados           AnexoManifestacao[]
+  melhorias                Melhoria[]
+
+  @@map("usuario")
+}
+
+model GestorSetor {
+  usuarioId Int      @map("usuario_id")
+  setorId   Int      @map("setor_id")
+  criadoEm  DateTime @default(now()) @map("criado_em") @db.Timestamptz
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  setor   Setor   @relation(fields: [setorId], references: [id], onDelete: Restrict)
+
+  @@id([usuarioId, setorId])
+  @@map("gestor_setor")
+}
+
+model LogAuditoria {
+  id              BigInt        @id @default(autoincrement())
+  usuarioId       Int           @map("usuario_id")
+  acao            AcaoAuditoria
+  entidade        String        @db.VarChar(40)
+  entidadeId      String        @map("entidade_id") @db.VarChar(40)
+  dadosAnteriores Json?         @map("dados_anteriores")
+  dadosNovos      Json?         @map("dados_novos")
+  criadoEm        DateTime      @default(now()) @map("criado_em") @db.Timestamptz
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([entidade, entidadeId])
+  @@map("log_auditoria")
+}
+
+// ---------------------------------------------------------------------------
+// Estrutura do hospital (seção 5.3)
+// ---------------------------------------------------------------------------
+
+model Setor {
+  id           Int      @id @default(autoincrement())
+  nome         String   @unique @db.VarChar(80)
+  slug         String   @unique @db.VarChar(80)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  gestores      GestorSetor[]
+  equipes       Equipe[]
+  escalas       Escala[]
+  atendimentos  AtendimentoMensal[]
+  perguntas     Pergunta[]
+  sessoes       Sessao[]
+  manifestacoes Manifestacao[]
+
+  @@map("setor")
+}
+
+model Turno {
+  id           Int      @id @default(autoincrement())
+  nome         String   @unique @db.VarChar(40)
+  // TIME: o Prisma representa como DateTime em 1970-01-01 (UTC); só a hora importa
+  horaInicio   DateTime @map("hora_inicio") @db.Time(6)
+  horaFim      DateTime @map("hora_fim") @db.Time(6)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  escalas       Escala[]
+  sessoes       Sessao[]
+  respostas     Resposta[]
+  manifestacoes Manifestacao[]
+
+  @@map("turno")
+}
+
+model Equipe {
+  id           Int      @id @default(autoincrement())
+  setorId      Int      @map("setor_id")
+  nome         String   @db.VarChar(80)
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  setor   Setor    @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  escalas Escala[]
+
+  @@unique([setorId, nome])
+  @@map("equipe")
+}
+
+model Escala {
+  id             Int      @id @default(autoincrement())
+  setorId        Int      @map("setor_id")
+  // Data de INÍCIO do turno (D13)
+  data           DateTime @db.Date
+  turnoId        Int      @map("turno_id")
+  equipeId       Int      @map("equipe_id")
+  importadaPorId Int      @map("importada_por_id")
+  importadaEm    DateTime @default(now()) @map("importada_em") @db.Timestamptz
+
+  setor        Setor   @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  turno        Turno   @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  equipe       Equipe  @relation(fields: [equipeId], references: [id], onDelete: Restrict)
+  importadaPor Usuario @relation(fields: [importadaPorId], references: [id], onDelete: Restrict)
+
+  @@unique([setorId, data, turnoId])
+  @@map("escala")
+}
+
+model AtendimentoMensal {
+  id             Int      @id @default(autoincrement())
+  setorId        Int      @map("setor_id")
+  // Sempre o dia 1 do mês de referência
+  competencia    DateTime @db.Date
+  quantidade     Int
+  informadoPorId Int      @map("informado_por_id")
+  criadoEm       DateTime @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm   DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  setor        Setor   @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  informadoPor Usuario @relation(fields: [informadoPorId], references: [id], onDelete: Restrict)
+
+  @@unique([setorId, competencia])
+  @@map("atendimento_mensal")
+}
+
+// ---------------------------------------------------------------------------
+// Pesquisa (seção 5.4)
+// ---------------------------------------------------------------------------
+
+model Etapa {
+  id    Int    @id @default(autoincrement())
+  nome  String @unique @db.VarChar(40)
+  ordem Int    @unique @db.SmallInt
+
+  perguntas     Pergunta[]
+  sessoes       SessaoEtapa[]
+  manifestacoes Manifestacao[]
+
+  @@map("etapa")
+}
+
+model Pergunta {
+  id           Int          @id @default(autoincrement())
+  setorId      Int          @map("setor_id")
+  // Vazio nas perguntas gerais, como a de data e período
+  etapaId      Int?         @map("etapa_id")
+  texto        String       @db.VarChar(200)
+  tipo         TipoPergunta
+  ordem        Int          @db.SmallInt
+  ativa        Boolean      @default(true)
+  criadoEm     DateTime     @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm DateTime     @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  setor     Setor           @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  etapa     Etapa?          @relation(fields: [etapaId], references: [id], onDelete: Restrict)
+  opcoes    OpcaoPergunta[]
+  respostas Resposta[]
+
+  @@map("pergunta")
+}
+
+model OpcaoPergunta {
+  id         Int     @id @default(autoincrement())
+  perguntaId Int     @map("pergunta_id")
+  texto      String  @db.VarChar(100)
+  ordem      Int     @db.SmallInt
+  ativa      Boolean @default(true)
+
+  pergunta  Pergunta   @relation(fields: [perguntaId], references: [id], onDelete: Restrict)
+  respostas Resposta[]
+
+  @@map("opcao_pergunta")
+}
+
+model Sessao {
+  // UUID: o código circula nas rotas públicas e não pode ser adivinhado (D10)
+  id              String        @id @default(uuid()) @db.Uuid
+  setorId         Int           @map("setor_id")
+  canal           CanalResposta
+  dataAtendimento DateTime      @map("data_atendimento") @db.Date
+  turnoId         Int           @map("turno_id")
+  turnoOrigem     OrigemTurno   @default(CALCULADO) @map("turno_origem")
+  notaGeral       Int?          @map("nota_geral") @db.SmallInt
+  iniciadaEm      DateTime      @default(now()) @map("iniciada_em") @db.Timestamptz
+  concluidaEm     DateTime?     @map("concluida_em") @db.Timestamptz
+
+  setor         Setor          @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  turno         Turno          @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  etapas        SessaoEtapa[]
+  respostas     Resposta[]
+  manifestacoes Manifestacao[]
+
+  @@index([setorId, dataAtendimento])
+  @@index([dataAtendimento])
+  @@map("sessao")
+}
+
+model SessaoEtapa {
+  sessaoId String @map("sessao_id") @db.Uuid
+  etapaId  Int    @map("etapa_id")
+
+  sessao Sessao @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
+  etapa  Etapa  @relation(fields: [etapaId], references: [id], onDelete: Restrict)
+
+  @@id([sessaoId, etapaId])
+  @@map("sessao_etapa")
+}
+
+model Resposta {
+  id            BigInt    @id @default(autoincrement())
+  sessaoId      String    @map("sessao_id") @db.Uuid
+  perguntaId    Int       @map("pergunta_id")
+  pulada        Boolean   @default(false)
+  valorNumero   Int?      @map("valor_numero") @db.SmallInt
+  valorBooleano Boolean?  @map("valor_booleano")
+  opcaoId       Int?      @map("opcao_id")
+  valorData     DateTime? @map("valor_data") @db.Date
+  turnoId       Int?      @map("turno_id")
+  respondidaEm  DateTime  @default(now()) @map("respondida_em") @db.Timestamptz
+
+  sessao   Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
+  pergunta Pergunta       @relation(fields: [perguntaId], references: [id], onDelete: Restrict)
+  opcao    OpcaoPergunta? @relation(fields: [opcaoId], references: [id], onDelete: Restrict)
+  turno    Turno?         @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+
+  @@unique([sessaoId, perguntaId])
+  @@index([perguntaId])
+  @@map("resposta")
+}
+
+// ---------------------------------------------------------------------------
+// Ouvidoria e TV Wall (seção 5.5)
+// ---------------------------------------------------------------------------
+
+model TermoPrivacidade {
+  id          Int      @id @default(autoincrement())
+  versao      Int      @unique
+  texto       String
+  criadoPorId Int      @map("criado_por_id")
+  criadoEm    DateTime @default(now()) @map("criado_em") @db.Timestamptz
+
+  criadoPor     Usuario        @relation(fields: [criadoPorId], references: [id], onDelete: Restrict)
+  manifestacoes Manifestacao[]
+
+  @@map("termo_privacidade")
+}
+
+model Manifestacao {
+  id                  Int                @id @default(autoincrement())
+  origem              OrigemManifestacao
+  sessaoId            String?            @map("sessao_id") @db.Uuid
+  registradaPorId     Int?               @map("registrada_por_id")
+  // Vazio = a classificar: quem define o tipo é a Ouvidoria (RN12, D14)
+  tipo                TipoManifestacao?
+  setorId             Int                @map("setor_id")
+  etapaId             Int?               @map("etapa_id")
+  dataOcorrencia      DateTime           @map("data_ocorrencia") @db.Date
+  turnoId             Int?               @map("turno_id")
+  texto               String?
+  profissionalCitado  String?            @map("profissional_citado") @db.VarChar(120)
+  // Continua verdadeiro depois da anonimização (D7)
+  pediuRetorno        Boolean            @default(false) @map("pediu_retorno")
+  telefoneCifrado     String?            @map("telefone_cifrado")
+  telefoneHash        String?            @map("telefone_hash") @db.Char(64)
+  termoPrivacidadeId  Int?               @map("termo_privacidade_id")
+  consentimentoEm     DateTime?          @map("consentimento_em") @db.Timestamptz
+  status              StatusManifestacao @default(NOVA)
+  desfecho            String?
+  finalizadaEm        DateTime?          @map("finalizada_em") @db.Timestamptz
+  possivelDuplicata   Boolean            @default(false) @map("possivel_duplicata")
+  // Texto editado exibido no TV Wall; o texto original nunca muda (D9)
+  textoTvWall         String?            @map("texto_tv_wall") @db.VarChar(300)
+  aprovadaTvWallEm    DateTime?          @map("aprovada_tv_wall_em") @db.Timestamptz
+  aprovadaTvWallPorId Int?               @map("aprovada_tv_wall_por_id")
+  criadoEm            DateTime           @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm        DateTime           @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  sessao            Sessao?             @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
+  registradaPor     Usuario?            @relation("ManifestacaoRegistradaPor", fields: [registradaPorId], references: [id], onDelete: Restrict)
+  setor             Setor               @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  etapa             Etapa?              @relation(fields: [etapaId], references: [id], onDelete: Restrict)
+  turno             Turno?              @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  termoPrivacidade  TermoPrivacidade?   @relation(fields: [termoPrivacidadeId], references: [id], onDelete: Restrict)
+  aprovadaTvWallPor Usuario?            @relation("ManifestacaoAprovadaTvWallPor", fields: [aprovadaTvWallPorId], references: [id], onDelete: Restrict)
+  tentativas        TentativaContato[]
+  anexos            AnexoManifestacao[]
+
+  @@index([status, criadoEm])
+  @@index([setorId, dataOcorrencia])
+  @@index([telefoneHash, setorId])
+  @@map("manifestacao")
+}
+
+model TentativaContato {
+  id             Int              @id @default(autoincrement())
+  manifestacaoId Int              @map("manifestacao_id")
+  usuarioId      Int              @map("usuario_id")
+  realizadaEm    DateTime         @map("realizada_em") @db.Timestamptz
+  resultado      ResultadoContato
+  observacao     String?
+  criadoEm       DateTime         @default(now()) @map("criado_em") @db.Timestamptz
+
+  manifestacao Manifestacao @relation(fields: [manifestacaoId], references: [id], onDelete: Restrict)
+  usuario      Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  @@index([manifestacaoId])
+  @@map("tentativa_contato")
+}
+
+model AnexoManifestacao {
+  id             Int      @id @default(autoincrement())
+  manifestacaoId Int      @map("manifestacao_id")
+  conteudo       Bytes
+  tipoMime       String   @map("tipo_mime") @db.VarChar(50)
+  tamanhoBytes   Int      @map("tamanho_bytes")
+  enviadoPorId   Int      @map("enviado_por_id")
+  criadoEm       DateTime @default(now()) @map("criado_em") @db.Timestamptz
+
+  manifestacao Manifestacao @relation(fields: [manifestacaoId], references: [id], onDelete: Restrict)
+  enviadoPor   Usuario      @relation(fields: [enviadoPorId], references: [id], onDelete: Restrict)
+
+  @@map("anexo_manifestacao")
+}
+
+model Melhoria {
+  id           Int      @id @default(autoincrement())
+  titulo       String   @db.VarChar(120)
+  descricao    String?  @db.VarChar(300)
+  // DATE: só o dia em que a melhoria foi feita
+  realizadaEm  DateTime @map("realizada_em") @db.Date
+  publicada    Boolean  @default(false)
+  criadaPorId  Int      @map("criada_por_id")
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+
+  criadaPor Usuario @relation(fields: [criadaPorId], references: [id], onDelete: Restrict)
+
+  @@map("melhoria")
+}

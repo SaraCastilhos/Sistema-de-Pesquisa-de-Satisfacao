@@ -1,7 +1,7 @@
 # Arquitetura do Backend — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.9 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.10 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
 
 Este documento descreve como o backend é organizado: as tecnologias, as camadas, os padrões de projeto, o contrato da API e as decisões que garantem manutenibilidade, segurança e escalabilidade. Os detalhes de segurança e hospedagem estão em [`seguranca-e-nuvem.md`](seguranca-e-nuvem.md), e as consultas ao banco em [`mapeamento-classes-e-consultas.md`](mapeamento-classes-e-consultas.md).
 
@@ -249,7 +249,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `PUT` | `/api/publico/sessoes/:id/etapas` | Grava as etapas que o paciente viveu | RF06 |
 | `POST` | `/api/publico/sessoes/:id/respostas` | Grava uma resposta ou um pulo | RF03, RF07 |
 | `PUT` | `/api/publico/sessoes/:id/nota` | Grava a nota geral | RF03, RF08 |
-| `POST` | `/api/publico/sessoes/:id/manifestacoes` | Registra elogio, reclamação ou sugestão, com telefone opcional | RF09, RF10 |
+| `POST` | `/api/publico/sessoes/:id/manifestacoes` | Registra a mensagem do paciente para a Ouvidoria, sem tipo (a classificar) e com telefone opcional | RF09, RF10, RN12 |
 | `GET` | `/api/publico/termos` | Texto vigente dos termos de privacidade | RF24 |
 | `GET` | `/api/publico/tv-wall` | Painéis agregados do TV Wall | RF30, RN08 |
 | `GET` | `/api/saude` | Verificação de funcionamento (usada pelo Render) | — |
@@ -288,6 +288,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `GET` `POST` | `/api/manifestacoes` | SA | Lista com filtros e registro de outros canais | RF14, RF17 |
 | `GET` | `/api/manifestacoes/alertas` | SA | Pedidos de retorno sem contato em 48 horas úteis | RF16 |
 | `GET` | `/api/manifestacoes/:id` | SA | Detalhe do chamado, com o telefone decifrado | RF14, RNF10 |
+| `PUT` | `/api/manifestacoes/:id/tipo` | SA | Classificar a manifestação ou corrigir o tipo | RF15, RN12 |
 | `POST` | `/api/manifestacoes/:id/tentativas` | SA | Registrar tentativa de contato | RF15 |
 | `POST` | `/api/manifestacoes/:id/finalizacao` | SA | Encerrar ou marcar sem retorno | RF15, RN07 |
 | `PUT` `DELETE` | `/api/manifestacoes/:id/tv-wall` | SA | Aprovar um elogio para o TV Wall ou retirar a aprovação | RF18 |
@@ -371,7 +372,8 @@ O mesmo *polling* do TV Wall mantém a API ativa enquanto a TV está ligada, evi
 | **Relatório mensal em PDF** | Gerado sob demanda com PDFKit, com os indicadores do mês e a comparação com o mês anterior | RF29 |
 | **Alerta de 48 horas úteis** | Calculado no momento da consulta, por uma função pura em `utils/horasUteis.js` que conta só as horas de segunda a sexta. Não há tarefa agendada | RF16 |
 | **Possível duplicata** | Ao registrar uma manifestação com telefone, o service procura outra com o mesmo `telefone_hash` e setor nas últimas 24 horas | RF19 |
-| **Finalização do chamado** | Uma transação muda o status, grava o desfecho, apaga telefone e hash e registra o log. Se qualquer passo falhar, nada é alterado | RN07, RNF11 |
+| **Classificação da manifestação** | O Super Admin define o tipo (elogio, reclamação ou sugestão) e pode corrigi-lo; o tipo anterior e o novo vão para o log. O tipo nunca volta a ficar vazio, e um elogio aprovado para o TV Wall só muda de tipo depois de retirada a aprovação (`409`) | RN12, RF18, RNF11 |
+| **Finalização do chamado** | Exige o tipo definido (`422` se ainda estiver a classificar). Uma transação muda o status, grava o desfecho, apaga telefone e hash e registra o log. Se qualquer passo falhar, nada é alterado | RN07, RNF11 |
 | **Fotos de formulários** | Recebidas com multer (até 300 KB, só imagens), já reduzidas pelo frontend, e gravadas no banco | RF17 |
 
 O projeto não usa tarefas agendadas (*cron*): tudo o que depende do tempo, como o alerta de 48 horas e a expiração de sessões em 12 horas, é calculado no momento da consulta. Isso evita depender de um serviço extra e funciona mesmo com a API suspensa.

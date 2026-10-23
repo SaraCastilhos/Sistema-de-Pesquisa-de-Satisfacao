@@ -1,0 +1,13 @@
+# Finais de linha sempre LF, em qualquer sistema operacional.
+# Sem isto, o Git do Windows grava CRLF nos arquivos ao trocar de branch,
+# e o Prettier (que exige LF) passa a acusar todos eles.
+* text=auto eol=lf
+
+# Arquivos binários: nunca converter
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.xlsx binary

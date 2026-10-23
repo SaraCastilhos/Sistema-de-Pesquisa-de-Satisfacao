@@ -1,7 +1,7 @@
 # Plano e Relatório de Testes — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 (plano) — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.9 e [Arquitetura do Backend](arquitetura-backend.md)
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.10 e [Arquitetura do Backend](arquitetura-backend.md)
 
 Este documento tem duas partes. A **Parte 1** é o plano: a estratégia, os ambientes e os casos de teste que comprovam cada requisito. A **Parte 2** é o relatório de execução, preenchido conforme os testes são executados, com os resultados, a cobertura e os defeitos encontrados.
 
@@ -101,18 +101,20 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT14 | RF08, RN05 | M | Nota 0 a 6; depois nota 7 a 10 | 0–6 abre o espaço da Ouvidoria; 7–10 pergunta se alguém fez diferença |
 | CT15 | RF10, RN06 | I | Manifestação com telefone e consentimento | Telefone gravado cifrado, hash gravado, versão dos termos registrada, status `NOVA` |
 | CT16 | RF10, RN06 | I | Manifestação com telefone, sem consentimento | `400`; nenhum telefone gravado |
-| CT17 | RF10 | M | Informar telefone e tocar em "Cancelar" e confirmar | Telefone descartado; pesquisa segue para o agradecimento |
+| CT17 | RF10 | M | Escrever uma manifestação, informar telefone, tocar em "Cancelar" e confirmar | Manifestação inteira descartada: nada é enviado à API (nem texto nem telefone); pesquisa segue para o agradecimento |
 | CT18 | RF11 | M | Concluir a pesquisa no tablet | Volta ao início sozinha após 8 s; o botão "Nova pesquisa" volta na hora |
 | CT19 | RF13 | M | Celular: abrir de novo a pesquisa do mesmo setor em menos de 12 h | Mensagem "Você já respondeu hoje", com opção de complementar |
 | CT20 | RF13 | M | Tablet: 2 minutos sem toque no meio da pesquisa | Tela "Continuar pesquisa" ou "Nova pesquisa"; "Continuar" retoma no mesmo ponto |
 | CT21 | RF04, RF05 | M | Percorrer a pesquisa inteira | Uma pergunta por tela; primeira pergunta de cada etapa é rostinho; nenhum contador ou barra de progresso |
 | CT22 | RNF05 | M | 5 pessoas que não conhecem o sistema respondem a pesquisa | Cada uma conclui em até 1 minuto; pular custa 1 toque |
+| CT76 | RF10, RN06 | M | Informar telefone e tocar em "Enviar" sem marcar a autorização; depois apagar o telefone e enviar | Primeiro: aviso de autorização pendente, nada é enviado e a tela não muda; segundo: manifestação enviada anônima |
+| CT77 | RF09, RN12 | I | Enviar uma manifestação pela pesquisa; depois enviar outra com o campo `tipo` | Primeira gravada com `tipo` vazio (a classificar) e status `NOVA`; segunda `400`, pois o campo não existe no contrato |
 
 ### 6.2 Ouvidoria
 
 | ID | Requisito | Nível | Caso | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| CT23 | RF14 | I | Listar manifestações com filtros de status, tipo, setor, período e turno | Somente os registros que atendem aos filtros, paginados; sem telefone na lista |
+| CT23 | RF14 | I | Listar manifestações com filtros de status, tipo (inclusive "a classificar"), setor, período e turno | Somente os registros que atendem aos filtros, paginados; sem telefone na lista |
 | CT24 | RF14, RNF10 | I | Detalhe de um chamado com telefone, pelo Super Admin | Telefone decifrado corretamente |
 | CT25 | RF15 | I | Registrar a primeira tentativa de contato | Tentativa gravada; status muda de `NOVA` para `EM_CONTATO` |
 | CT26 | RF15 | U | Marcar "Sem retorno" com 2 tentativas sem sucesso | `422`; status inalterado |
@@ -121,10 +123,13 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT29 | RN07 | I | Finalizar um chamado já finalizado | `409` |
 | CT30 | RF16 | U | Horas úteis entre sexta 17h e terça 9h | 40 horas (sábado e domingo não contam) |
 | CT31 | RF16 | I | Pedido de retorno com status `NOVA` há mais de 48 horas úteis | Aparece em `/alertas`; após a primeira tentativa, sai do alerta |
-| CT32 | RF17 | I | Registrar manifestação de outro canal | Gravada com `registrada_por_id` e origem correta; mesmo fluxo de status |
+| CT32 | RF17, RN12 | I | Registrar manifestação de outro canal; depois registrar outra sem tipo | Primeira gravada com `registrada_por_id`, origem e tipo corretos e o mesmo fluxo de status; segunda `400` |
 | CT33 | RF17 | I | Anexar foto PNG de 200 KB; depois arquivo PDF; depois imagem de 400 KB; depois a 4ª foto | Primeira aceita; as demais recusadas |
 | CT34 | RF18, RN08 | I | Aprovar um elogio com texto editado; tentar aprovar uma reclamação | Elogio aparece no TV Wall com o texto editado; reclamação recusada |
 | CT35 | RF19 | I | Duas manifestações com o mesmo telefone (formatado de jeitos diferentes) e setor em 24 h | A segunda é gravada e marcada como possível duplicata |
+| CT78 | RN12, RNF11 | I | Classificar uma manifestação da pesquisa como reclamação; corrigir para sugestão; tentar deixá-la sem tipo | Tipo gravado nas duas primeiras, cada uma com uma linha `ALTERACAO` no log com o tipo anterior e o novo; a terceira `400` |
+| CT79 | RN12 | I | Encerrar com desfecho um chamado ainda a classificar | `422`; nada alterado |
+| CT80 | RN12, RF18 | I | Reclassificar como reclamação um elogio aprovado para o TV Wall; retirar a aprovação e repetir | Primeira `409`, tipo inalterado; segunda aceita |
 
 ### 6.3 Administração e acesso
 
@@ -165,12 +170,14 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT58 | RF30 | M | TV Wall sem elogios aprovados nem melhorias | Esses painéis não entram no rodízio; os demais alternam a cada 15 s |
 | CT59 | RNF07 | I | Duas leituras do resumo sem gravação entre elas; depois uma gravação | Segunda leitura vem do cache, sem consultar o banco; após a gravação, o valor é recalculado |
 | CT60 | RNF07 | M | Responder uma pesquisa com o dashboard e o TV Wall abertos | A resposta aparece nas duas telas em até 5 s |
+| CT81 | RF27, RN12 | I | Manifestações por tipo com elogios, reclamações e uma manifestação a classificar | Contagem de cada tipo mais a categoria "a classificar" com 1 |
+| CT82 | RF30, RN08 | M | Abrir o TV Wall com `/tv-wall/pronto-atendimento` e depois só com `/tv-wall` | No primeiro, o QR Code abre a pesquisa do Pronto Atendimento; no segundo, o painel do QR Code não entra no rodízio; os demais painéis são iguais nos dois, sem nenhum dado do setor |
 
 ### 6.5 Banco de dados, segurança e qualidade
 
 | ID | Requisito | Nível | Caso | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| CT61 | Seção 6 do modelo | B | Suíte de restrições: nota fora da faixa, resposta pulada com valor, telefone sem consentimento, finalização sem anonimização, anexo acima do limite, entre outras | O banco recusa todos os registros inválidos e aceita os válidos |
+| CT61 | Seção 6 do modelo | B | Suíte de restrições: nota fora da faixa, resposta pulada com valor, telefone sem consentimento, finalização sem anonimização, manifestação de outro canal sem tipo, finalização sem tipo, anexo acima do limite, entre outras | O banco recusa todos os registros inválidos e aceita os válidos |
 | CT62 | RNF09 | I | Enviar `'; DROP TABLE sessao; --` em campos de texto e filtros | Tratado como texto comum; nenhuma tabela afetada |
 | CT63 | RNF09 | I | Enviar `<script>alert(1)</script>` no texto da manifestação | Gravado sem as tags HTML |
 | CT64 | RNF09 | I | Enviar campos que não existem no contrato da API | `400` |
