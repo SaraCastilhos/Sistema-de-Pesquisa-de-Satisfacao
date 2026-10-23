@@ -1,0 +1,5 @@
+# Contrato das rotas do módulo auth, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Autenticação
+    description: Login e dados do usuário logado
+paths: {}

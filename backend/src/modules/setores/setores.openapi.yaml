@@ -1,0 +1,5 @@
+# Contrato das rotas do módulo setores, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Setores
+    description: Cadastro de setores
+paths: {}

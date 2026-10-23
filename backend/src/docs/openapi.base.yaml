@@ -1,0 +1,106 @@
+# Parte comum do contrato da API. As rotas de cada módulo ficam em
+# src/modules/<módulo>/<módulo>.openapi.yaml e são juntadas a este arquivo por swagger.js.
+openapi: 3.1.0
+info:
+  title: API da Pesquisa de Satisfação FHDOD
+  version: 0.1.0
+  description: >
+    API REST do sistema de pesquisa de satisfação da Fundação Hospitalar Dr. Oswaldo Diesel.
+    As rotas em /api/publico não usam token; as demais exigem o token JWT recebido no login,
+    enviado no cabeçalho Authorization (botão Authorize).
+servers:
+  - url: /
+    description: Mesmo endereço desta documentação
+tags:
+  - name: Sistema
+    description: Verificação de funcionamento
+paths:
+  /api/saude:
+    get:
+      tags: [Sistema]
+      summary: Verifica se a API está no ar
+      description: Usada pelo Render para saber se a API está funcionando.
+      responses:
+        '200':
+          description: API funcionando
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Erro:
+      type: object
+      description: Formato de todas as respostas de erro (seção 7.4 da arquitetura)
+      required: [erro]
+      properties:
+        erro:
+          type: object
+          required: [codigo, mensagem, detalhes]
+          properties:
+            codigo:
+              type: string
+              description: Código fixo, usado pelo frontend
+              examples: [CHAMADO_SEM_TENTATIVAS_SUFICIENTES]
+            mensagem:
+              type: string
+              description: Mensagem para as pessoas
+              examples:
+                ['O status "Sem retorno" exige pelo menos 3 tentativas de contato sem sucesso.']
+            detalhes:
+              type: array
+              description: Informações extras, como os campos inválidos
+              items: {}
+  responses:
+    DadosInvalidos:
+      description: Dados inválidos (formato, campo faltando ou campo desconhecido)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+    NaoAutenticado:
+      description: Sem token, token expirado ou usuário desativado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+    SemPermissao:
+      description: Perfil sem permissão ou setor de outro gestor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+    NaoEncontrado:
+      description: Registro não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+    Conflito:
+      description: Conflito com o que já está gravado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+    RegraViolada:
+      description: Regra de negócio violada
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+    LimiteExcedido:
+      description: Limite de requisições atingido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
