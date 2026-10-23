@@ -1,0 +1,5 @@
+# Contrato das rotas do módulo escalas, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Escalas
+    description: Escala mensal (consulta, planilha-modelo e importação)
+paths: {}

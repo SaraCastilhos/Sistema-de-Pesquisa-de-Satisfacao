@@ -1,0 +1,5 @@
+# Contrato das rotas do módulo atendimentos, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Atendimentos
+    description: Atendimentos mensais por setor
+paths: {}

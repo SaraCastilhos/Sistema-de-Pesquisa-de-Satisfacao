@@ -1,0 +1,5 @@
+# Contrato das rotas do módulo perguntas, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Perguntas
+    description: Cadastro e ordenação das perguntas
+paths: {}

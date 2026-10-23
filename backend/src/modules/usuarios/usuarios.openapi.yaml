@@ -1,0 +1,5 @@
+# Contrato das rotas do módulo usuarios, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Usuários
+    description: Cadastro de usuários e setores dos gestores
+paths: {}
