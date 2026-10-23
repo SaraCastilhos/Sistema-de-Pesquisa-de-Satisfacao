@@ -117,7 +117,8 @@ backend/
 │   ├── middlewares/           # autenticar, exigirPerfil, validar, limitarRequisicoes, tratarErros
 │   ├── utils/                 # funções puras: turnos, horasUteis, telefone, cripto, datas
 │   ├── docs/
-│   │   └── openapi.yaml       # contrato da API (Swagger)
+│   │   ├── openapi.base.yaml  # parte comum do contrato: informações, segurança e formato de erro
+│   │   └── swagger.js         # junta o base com o contrato de cada módulo e publica o Swagger
 │   └── modules/
 │       ├── auth/
 │       ├── pesquisa/          # rotas públicas: sessões, respostas, nota, manifestação do paciente
@@ -147,7 +148,8 @@ modules/manifestacoes/
 ├── manifestacoes.controller.js
 ├── manifestacoes.service.js
 ├── manifestacoes.repository.js
-└── manifestacoes.schemas.js   # esquemas Zod das entradas
+├── manifestacoes.schemas.js   # esquemas Zod das entradas
+└── manifestacoes.openapi.yaml # contrato das rotas do módulo (seção 7)
 ```
 
 O `app.js` monta a aplicação sem chamar `listen`. Assim, os testes de integração usam a aplicação diretamente com o Supertest, sem abrir uma porta de rede.
@@ -229,7 +231,9 @@ Se a mesma pergunta for enviada duas vezes (por exemplo, por um toque duplo), a 
 
 ## 7. Contrato da API
 
-A API segue o estilo REST, troca dados em JSON e fica sob o prefixo `/api`. O contrato completo fica em `src/docs/openapi.yaml`, publicado com Swagger em `/api/docs` (RNF13).
+A API segue o estilo REST, troca dados em JSON e fica sob o prefixo `/api`. O contrato é dividido por módulo: cada módulo descreve as próprias rotas em `<módulo>.openapi.yaml`, e `src/docs/swagger.js` junta esses arquivos com a parte comum (`src/docs/openapi.base.yaml`: informações da API, autenticação por token e o formato de erro da seção 7.4). O resultado é publicado com Swagger em `/api/docs` (RNF13), e o contrato completo em JSON fica em `/api/docs/openapi.json`.
+
+Com um arquivo por módulo, as duas integrantes nunca editam o mesmo arquivo de contrato, o que evita conflitos no Git. Se a mesma rota ou o mesmo schema aparecer em dois arquivos, a API não inicia e indica onde está a repetição, em vez de um contrato sobrescrever o outro sem ninguém perceber.
 
 O contrato é escrito **antes** do código de cada rota (*contract-first*) e revisado no mesmo PR. Assim, o frontend pode ser construído em paralelo, com dados simulados que seguem o contrato.
 
@@ -402,7 +406,7 @@ flowchart LR
     E -- não --> G["PR bloqueado"]
 ```
 
-- **Documentação viva:** o `openapi.yaml` é atualizado no mesmo PR que muda uma rota, e o revisor confere os dois juntos.
+- **Documentação viva:** o `<módulo>.openapi.yaml` é atualizado no mesmo PR que muda uma rota do módulo, e o revisor confere os dois juntos.
 - **Logs:** cada requisição registra método, rota, status e tempo de resposta. O corpo das requisições e o cabeçalho de autorização **nunca** são registrados, porque podem conter telefone, textos dos pacientes ou o token.
 
 ---
