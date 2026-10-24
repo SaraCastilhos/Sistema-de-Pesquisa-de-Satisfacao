@@ -115,7 +115,9 @@ backend/
 │   │   ├── env.js             # lê e valida as variáveis de ambiente
 │   │   └── prisma.js          # instância única do Prisma Client
 │   ├── middlewares/           # autenticar, exigirPerfil, validar, limitarRequisicoes, tratarErros
-│   ├── utils/                 # funções puras: turnos, horasUteis, telefone, cripto, datas
+│   ├── repositories/          # repositories usados por vários módulos (ex.: auditoria)
+│   ├── utils/                 # turnos, horasUteis, telefone, cripto, sanitizar, datas, AppError,
+│   │                          # versaoDados, cache e paginacao
 │   ├── docs/
 │   │   ├── openapi.base.yaml  # parte comum do contrato: informações, segurança e formato de erro
 │   │   └── swagger.js         # junta o base com o contrato de cada módulo e publica o Swagger
@@ -137,8 +139,12 @@ backend/
 └── tests/
     ├── unit/                  # services e utils
     ├── integration/           # rotas com Supertest e banco de teste
-    └── helpers/               # criação de dados de teste
+    ├── helpers/               # limpeza do banco e criação de dados de teste
+    ├── globalSetup.js         # aplica as migrações no banco de teste antes da suíte
+    └── setup.js               # zera os limites de requisição antes de cada teste
 ```
+
+A pasta `src/repositories/` guarda os repositories que **vários módulos** usam, como o de auditoria (RNF11): manifestações, perguntas e usuários registram log, e nenhum desses módulos é "dono" da tabela `log_auditoria`. Os repositories de um módulo só ficam dentro do próprio módulo.
 
 Cada módulo segue o mesmo formato:
 
