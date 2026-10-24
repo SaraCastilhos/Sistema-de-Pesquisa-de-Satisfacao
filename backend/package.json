@@ -13,8 +13,8 @@
     "start": "node src/server.js",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "jest --runInBand",
-    "test:coverage": "jest --runInBand --coverage"
+    "test": "node --experimental-vm-modules --disable-warning=ExperimentalWarning node_modules/jest/bin/jest.js --runInBand",
+    "test:coverage": "npm test -- --coverage"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
