@@ -65,7 +65,8 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 
 | Repository | Principais funções | Tabelas | Operações |
 | --- | --- | --- | --- |
-| `usuarios` | `buscarPorEmail`, `buscarAtivoPorId`, `listar`, `criar`, `atualizar`, `definirSetores`, `listarSetoresDoGestor` | `usuario`, `gestor_setor` | Leitura e escrita; `definirSetores` substitui as atribuições numa transação |
+| `auth` | `buscarPorEmail`, `buscarAtivoPorId` | Leitura de `usuario` e `gestor_setor` | Só leitura. É o único repository que lê `senha_hash` (login); `buscarAtivoPorId` é usado pelo middleware `autenticar` a cada requisição |
+| `usuarios` | `listar`, `criar`, `atualizar`, `definirSetores`, `listarSetoresDoGestor` | `usuario`, `gestor_setor` | Leitura e escrita; `definirSetores` substitui as atribuições numa transação |
 | `auditoria` | `registrar` | `log_auditoria` | Só inserção |
 | `setores` | `listar`, `buscarPorSlug`, `criar`, `atualizar` | `setor` | Leitura e escrita, sem exclusão |
 | `turnos` | `listarAtivos`, `salvarGrade` | `turno` | `salvarGrade` cria, altera e desativa numa transação |
