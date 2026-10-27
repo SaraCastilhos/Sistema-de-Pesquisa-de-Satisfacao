@@ -2,4 +2,111 @@
 tags:
   - name: Autenticação
     description: Login e dados do usuário logado
-paths: {}
+paths:
+  /api/auth/login:
+    post:
+      tags: [Autenticação]
+      summary: Faz login e devolve o token
+      description: >
+        Recebe e-mail e senha (RF26) e devolve um token JWT válido por 8 horas. Use o token no botão
+        Authorize. E-mail inexistente, senha errada e usuário desativado recebem a mesma resposta 401,
+        para não revelar quais e-mails existem. Até 5 tentativas erradas a cada 15 minutos por IP e
+        e-mail; a 6ª recebe 429.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthLoginEntrada'
+      responses:
+        '200':
+          description: Login feito
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthLoginResposta'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          description: E-mail ou senha inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              example:
+                erro:
+                  codigo: CREDENCIAIS_INVALIDAS
+                  mensagem: E-mail ou senha inválidos.
+                  detalhes: []
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/auth/eu:
+    get:
+      tags: [Autenticação]
+      summary: Dados do usuário logado
+      description: >
+        Devolve o usuário do token e os setores atribuídos a ele (para o Gestor). O Super Admin tem
+        acesso a todos os setores, então a lista dele vem vazia.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usuário logado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUsuarioLogado'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+components:
+  schemas:
+    AuthLoginEntrada:
+      type: object
+      additionalProperties: false
+      required: [email, senha]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Maiúsculas e espaços nas pontas são ignorados
+          examples: [ouvidoria@exemplo.com]
+        senha:
+          type: string
+          minLength: 1
+          maxLength: 200
+          examples: [trocar-no-primeiro-acesso]
+    AuthLoginResposta:
+      type: object
+      required: [token, usuario]
+      properties:
+        token:
+          type: string
+          description: JWT (HS256) com o identificador e o perfil do usuário
+        usuario:
+          type: object
+          required: [id, nome, email, perfil]
+          properties:
+            id: { type: integer, examples: [1] }
+            nome: { type: string, examples: [Ouvidoria] }
+            email: { type: string, examples: [ouvidoria@exemplo.com] }
+            perfil: { type: string, enum: [SUPER_ADMIN, GESTOR] }
+    AuthUsuarioLogado:
+      type: object
+      required: [id, nome, email, perfil, setores]
+      properties:
+        id: { type: integer, examples: [2] }
+        nome: { type: string, examples: [Gestor Demonstração] }
+        email: { type: string, examples: [gestor@exemplo.com] }
+        perfil: { type: string, enum: [SUPER_ADMIN, GESTOR] }
+        setores:
+          type: array
+          description: Setores atribuídos ao Gestor (vazio para o Super Admin)
+          items:
+            type: object
+            required: [id, nome, slug, ativo]
+            properties:
+              id: { type: integer, examples: [1] }
+              nome: { type: string, examples: [Pronto Atendimento] }
+              slug: { type: string, examples: [pronto-atendimento] }
+              ativo: { type: boolean }
