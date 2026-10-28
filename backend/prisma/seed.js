@@ -1,6 +1,7 @@
 // Povoamento do banco (seção 5 de docs/padroes-banco-de-dados.md).
 // Pode rodar quantas vezes for preciso: nunca duplica nem altera o que já existe.
-//   - Sempre: etapas, turnos padrão, Super Admin inicial e versão 1 dos termos.
+//   - Sempre: etapas e turnos padrão (só se ainda não houver nenhum), Super Admin inicial e
+//     versão 1 dos termos.
 //   - Só com SEED_DEMONSTRACAO=true: dados fictícios para desenvolvimento e apresentação.
 const path = require('node:path');
 const dotenv = require('dotenv');
@@ -128,10 +129,13 @@ const TERMOS_V1 = `Termos de privacidade da Pesquisa de Satisfação da FHDOD (v
 
 5. Seus direitos. Você pode pedir acesso, correção ou eliminação do seu telefone a qualquer momento pela Ouvidoria do hospital. Contato do encarregado de dados da FHDOD: [a definir pela Ouvidoria].`;
 
+// As etapas padrão só são criadas num banco sem etapas. Depois disso, elas são do Super Admin
+// (RF20, D15): recriar "Triagem" depois de ele renomeá-la quebraria a restrição única de ordem.
 async function criarEtapas(prisma) {
-  for (const [indice, nome] of ETAPAS.entries()) {
-    await prisma.etapa.upsert({ where: { nome }, update: {}, create: { nome, ordem: indice + 1 } });
-  }
+  if ((await prisma.etapa.count()) > 0) return;
+  await prisma.etapa.createMany({
+    data: ETAPAS.map((nome, indice) => ({ nome, ordem: indice + 1 })),
+  });
 }
 
 // Os turnos padrão só são criados num banco sem turnos. Depois disso, a grade é do Super Admin
@@ -634,6 +638,12 @@ async function criarDemonstracao(prisma, superAdmin, variaveis) {
       const turnos = await tx.turno.findMany({ where: { ativo: true }, orderBy: { id: 'asc' } });
       if (turnos.length !== 3) {
         console.log('Demonstração: pulada, porque a grade de turnos não é mais a padrão.');
+        return;
+      }
+      // As perguntas de demonstração são escolhidas pelo nome da etapa (D15: o Super Admin
+      // pode renomear, criar ou desativar etapas)
+      if (etapas.map((etapa) => etapa.nome).join('|') !== ETAPAS.join('|')) {
+        console.log('Demonstração: pulada, porque as etapas não são mais as padrão.');
         return;
       }
 

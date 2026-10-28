@@ -152,6 +152,8 @@ model LogAuditoria {
 
 model Setor {
   id           Int      @id @default(autoincrement())
+  // Collation ignora_maiusculas_e_acentos (migração nomes_sem_maiusculas_e_acentos, D16):
+  // único sem diferenciar maiúsculas nem acentos; nunca use contains/startsWith neste campo
   nome         String   @unique @db.VarChar(80)
   slug         String   @unique @db.VarChar(80)
   ativo        Boolean  @default(true)
@@ -171,6 +173,8 @@ model Setor {
 
 model Turno {
   id           Int      @id @default(autoincrement())
+  // Collation ignora_maiusculas_e_acentos (migração nomes_sem_maiusculas_e_acentos, D16):
+  // único sem diferenciar maiúsculas nem acentos; nunca use contains/startsWith neste campo
   nome         String   @unique @db.VarChar(40)
   // TIME: o Prisma representa como DateTime em 1970-01-01 (UTC); só a hora importa
   horaInicio   DateTime @map("hora_inicio") @db.Time(6)
@@ -190,6 +194,8 @@ model Turno {
 model Equipe {
   id           Int      @id @default(autoincrement())
   setorId      Int      @map("setor_id")
+  // Collation ignora_maiusculas_e_acentos (migração nomes_sem_maiusculas_e_acentos, D16):
+  // único sem diferenciar maiúsculas nem acentos; nunca use contains/startsWith neste campo
   nome         String   @db.VarChar(80)
   ativo        Boolean  @default(true)
   criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
@@ -243,9 +249,13 @@ model AtendimentoMensal {
 // ---------------------------------------------------------------------------
 
 model Etapa {
-  id    Int    @id @default(autoincrement())
-  nome  String @unique @db.VarChar(40)
-  ordem Int    @unique @db.SmallInt
+  id    Int     @id @default(autoincrement())
+  // Collation ignora_maiusculas_e_acentos (migração nomes_sem_maiusculas_e_acentos, D16):
+  // único sem diferenciar maiúsculas nem acentos; nunca use contains/startsWith neste campo
+  nome  String  @unique @db.VarChar(40)
+  ordem Int     @unique @db.SmallInt
+  // Etapa desativada sai da pesquisa e continua nos indicadores antigos (D15)
+  ativo Boolean @default(true)
 
   perguntas     Pergunta[]
   sessoes       SessaoEtapa[]
