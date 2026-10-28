@@ -310,3 +310,60 @@ describe('CT61 - restrições CHECK do banco', () => {
     });
   });
 });
+
+// CT86: nomes cadastrados são únicos sem diferenciar maiúsculas nem acentos (D16, RN13).
+// A regra é da collation das colunas, então vale mesmo gravando direto pelo Prisma.
+describe('CT86 - nomes sem diferenciar maiúsculas nem acentos', () => {
+  it('CT86 - recusa setor, turno e etapa que só mudam em maiúsculas ou acentos', async () => {
+    await prisma.setor.create({ data: { nome: 'Recepção Central', slug: 'recepcao-central' } });
+    await expect(
+      prisma.setor.create({ data: { nome: 'RECEPCAO central', slug: 'outra-recepcao' } }),
+    ).rejects.toThrow('nome');
+
+    await prisma.turno.create({
+      data: {
+        nome: 'Plantão Diurno',
+        horaInicio: paraHoraBanco('07:00'),
+        horaFim: paraHoraBanco('19:00'),
+      },
+    });
+    await expect(
+      prisma.turno.create({
+        data: {
+          nome: 'plantao diurno',
+          horaInicio: paraHoraBanco('07:00'),
+          horaFim: paraHoraBanco('19:00'),
+        },
+      }),
+    ).rejects.toThrow('nome');
+
+    // limparBanco() cria a etapa "Médico"
+    await expect(prisma.etapa.create({ data: { nome: 'medico', ordem: 90 } })).rejects.toThrow(
+      'nome',
+    );
+  });
+
+  it('CT86 - recusa equipe repetida no mesmo setor e aceita o mesmo nome em outro setor', async () => {
+    const outroSetor = await criarSetor();
+    await prisma.equipe.create({ data: { setorId: setor.id, nome: 'Equipe Ágil' } });
+    await expect(
+      prisma.equipe.create({ data: { setorId: setor.id, nome: 'EQUIPE AGIL' } }),
+    ).rejects.toThrow('nome');
+    await expect(
+      prisma.equipe.create({ data: { setorId: outroSetor.id, nome: 'equipe agil' } }),
+    ).resolves.toHaveProperty('id');
+  });
+
+  it('CT86 - espaços e pontuação continuam diferenciando os nomes', async () => {
+    await prisma.setor.create({ data: { nome: 'Raio-X', slug: 'raio-x' } });
+    await expect(
+      prisma.setor.create({ data: { nome: 'Raio X', slug: 'raio-x-2' } }),
+    ).resolves.toHaveProperty('id');
+  });
+
+  it('CT86 - a busca pelo nome encontra o cadastro escrito de outra forma', async () => {
+    await prisma.setor.create({ data: { nome: 'Pronto Atendimento', slug: 'pronto-atendimento' } });
+    const encontrado = await prisma.setor.findUnique({ where: { nome: 'PRONTO atendimento' } });
+    expect(encontrado).toMatchObject({ nome: 'Pronto Atendimento' });
+  });
+});
