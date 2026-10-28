@@ -1,7 +1,7 @@
 # Plano e Relatório de Testes — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 (plano) — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.10 e [Arquitetura do Backend](arquitetura-backend.md)
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.11 e [Arquitetura do Backend](arquitetura-backend.md)
 
 Este documento tem duas partes. A **Parte 1** é o plano: a estratégia, os ambientes e os casos de teste que comprovam cada requisito. A **Parte 2** é o relatório de execução, preenchido conforme os testes são executados, com os resultados, a cobertura e os defeitos encontrados.
 
@@ -109,6 +109,7 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT22 | RNF05 | M | 5 pessoas que não conhecem o sistema respondem a pesquisa | Cada uma conclui em até 1 minuto; pular custa 1 toque |
 | CT76 | RF10, RN06 | M | Informar telefone e tocar em "Enviar" sem marcar a autorização; depois apagar o telefone e enviar | Primeiro: aviso de autorização pendente, nada é enviado e a tela não muda; segundo: manifestação enviada anônima |
 | CT77 | RF09, RN12 | I | Enviar uma manifestação pela pesquisa; depois enviar outra com o campo `tipo` | Primeira gravada com `tipo` vazio (a classificar) e status `NOVA`; segunda `400`, pois o campo não existe no contrato |
+| CT84 | RF06, D15 | I | Buscar a pesquisa de um setor com uma etapa desativada e outra ativa mas sem perguntas no setor; tentar escolher cada uma delas na sessão | As duas ficam fora da pesquisa; escolhê-las na sessão dá `422` |
 
 ### 6.2 Ouvidoria
 
@@ -147,13 +148,15 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT71 | RF21 | I | Importar planilha com uma equipe não cadastrada no setor (ex.: "Equipe  A", com dois espaços no meio) | `422` indicando a linha e o nome; nenhuma linha gravada; nenhuma equipe criada |
 | CT72 | RF20, RF21 | I | Desativar uma equipe e importar uma planilha que a usa | `422`; os indicadores dos meses em que a equipe trabalhou continuam iguais |
 | CT73 | RF20, RN04 | I | Renomear uma equipe que já tem escala | Os indicadores passados aparecem com o nome novo, sem perder nenhuma resposta |
-| CT74 | RF20 | I | Cadastrar "equipe a" num setor que já tem "Equipe A"; cadastrar "Equipe A" em outro setor | Primeiro: `422`; segundo: aceito |
+| CT74 | RF20, RN13 | I | Cadastrar "equipe a" e "Équipe A" num setor que já tem "Equipe A"; cadastrar "Equipe A" em outro setor | Os dois primeiros: `409`; o terceiro: aceito |
 | CT75 | RF20 | I | Gestor tenta cadastrar, renomear ou desativar uma equipe | `403` |
 | CT45 | RF22, RF04 | U | Reordenar de modo que a primeira pergunta de uma etapa não seja rostinho | `422` |
 | CT46 | RF23, RN09 | I/B | Desativar pergunta com respostas; tentar excluí-la direto no banco | Pergunta some da pesquisa e as respostas continuam nos indicadores; exclusão recusada pelo banco |
 | CT47 | RF22 | U | Mudar o tipo de uma pergunta que já tem respostas | `422` |
 | CT48 | RF24, RN06 | I | Publicar nova versão dos termos | Nova versão vigente; manifestações antigas continuam ligadas à versão aceita |
 | CT49 | RNF11 | I | Alterar uma pergunta, um usuário e uma manifestação | Uma linha no log para cada alteração, com usuário, ação e data |
+| CT83 | RF20, D15 | I | Super Admin cria, renomeia, reordena e desativa uma etapa; Gestor tenta cadastrar e lista as etapas | Super Admin: todas as operações aceitas, sem exclusão, com auditoria; Gestor: lista com `200` e `403` ao gravar |
+| CT85 | RF22, D15 | I | Criar uma pergunta numa etapa desativada; reativar uma pergunta de etapa desativada | `422` nos dois casos |
 
 ### 6.4 Indicadores e TV Wall
 
@@ -187,6 +190,7 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT68 | RNF04 | M | Auditoria de acessibilidade da pesquisa | Lighthouse Acessibilidade ≥ 90; botões ≥ 48 × 48 px; fonte ≥ 18 px; contraste ≥ 4,5:1; rostinhos com rótulo |
 | CT69 | RNF07 | M | Lighthouse da pesquisa no celular com rede 4G simulada, API já ativa | Página utilizável em menos de 3 s |
 | CT70 | RNF03 | M | Abrir cada tela nas resoluções da seção 4.2 | Sem rolagem horizontal, sem textos cortados, sem elementos sobrepostos |
+| CT86 | RN13, D16 | B/I | Gravar direto no banco setor, turno e etapa que só mudam em maiúsculas ou acentos ("RECEPCAO central" com "Recepção Central" já cadastrado); equipe repetida no mesmo setor e em outro; "Raio X" com "Raio-X" já cadastrado; buscar "PRONTO atendimento"; criar pela API setor que só muda em maiúsculas ou acentos | Repetições recusadas pelo banco; mesma equipe em outro setor aceita; "Raio X" aceito; a busca encontra "Pronto Atendimento"; a API responde `409 NOME_EM_USO` |
 
 ## 7. Critérios
 

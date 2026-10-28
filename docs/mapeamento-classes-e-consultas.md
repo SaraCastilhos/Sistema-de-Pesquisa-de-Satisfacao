@@ -43,7 +43,7 @@ O Prisma gera, a partir do `schema.prisma`, uma classe de acesso para cada model
 | `Equipe` | `equipe` | `prisma.equipe` | `equipes.repository` |
 | `Escala` | `escala` | `prisma.escala` | `escalas.repository` |
 | `AtendimentoMensal` | `atendimento_mensal` | `prisma.atendimentoMensal` | `atendimentos.repository` |
-| `Etapa` | `etapa` | `prisma.etapa` | `perguntas.repository` |
+| `Etapa` | `etapa` | `prisma.etapa` | `etapas.repository` (cadastro); `perguntas.repository` e `pesquisa.repository` também leem |
 | `Pergunta` | `pergunta` | `prisma.pergunta` | `perguntas.repository` |
 | `OpcaoPergunta` | `opcao_pergunta` | `prisma.opcaoPergunta` | `perguntas.repository` |
 | `Sessao` | `sessao` | `prisma.sessao` | `pesquisa.repository` |
@@ -69,8 +69,9 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 | `usuarios` | `listar`, `criar`, `atualizar`, `definirSetores`, `listarSetoresDoGestor` | `usuario`, `gestor_setor` | Leitura e escrita; `definirSetores` substitui as atribuições numa transação |
 | `auditoria` | `registrar` | `log_auditoria` | Só inserção |
 | `setores` | `listar`, `buscarPorId`, `buscarPorSlug`, `criar`, `atualizar` | `setor` | Leitura e escrita, sem exclusão |
+| `etapas` | `listar`, `buscarPorId`, `criar`, `atualizar`, `reordenar` | `etapa` | Leitura e escrita, sem exclusão; `reordenar` grava em duas fases numa transação, porque `ordem` é única |
 | `turnos` | `listarAtivos`, `salvarGrade` | `turno` | `salvarGrade` cria, altera e desativa numa transação |
-| `equipes` | `listarDoSetor`, `listarAtivasDosSetores`, `existeNomeNoSetor`, `criar`, `atualizar` | `equipe` | Leitura e escrita, sem exclusão |
+| `equipes` | `listarDoSetor`, `listarAtivasDosSetores`, `criar`, `atualizar` | `equipe` | Leitura e escrita, sem exclusão; nome repetido é recusado pelo banco (D16) e traduzido em `409` |
 | `escalas` | `listarDoMes`, `substituirMes` | `escala` | Importação em transação (consulta 4.9) |
 | `atendimentos` | `listarDoMes`, `salvar` | `atendimento_mensal` | `upsert` por setor e mês |
 | `perguntas` | `listarAtivasDoSetor`, `listar`, `criar`, `atualizar`, `reordenar`, `contarRespostas` | `pergunta`, `opcao_pergunta`, `etapa` | Leitura e escrita, sem exclusão |
@@ -90,6 +91,7 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 | `telefone.normalizar(texto)` | Deixa só os dígitos, com DDI e DDD |
 | `cripto.cifrar(texto)` / `cripto.decifrar(valor)` | AES-256-GCM com prefixo de versão da chave |
 | `cripto.hmac(texto)` | Hash HMAC-SHA256 do telefone |
+| `nomes.chaveDeNome(nome)` | Chave para comparar nomes em memória com a mesma regra da *collation* do banco: sem maiúsculas, acentos e espaços nas pontas (RN13, D16) |
 
 ---
 
@@ -335,7 +337,8 @@ O status `NOVA` já indica que não houve nenhuma tentativa de contato, porque a
 Primeiro, o service valida a planilha inteira contra as equipes cadastradas, sem gravar nada:
 
 ```js
-const chave = (setorId, nome) => `${setorId}:${nome.trim().toLowerCase()}`;
+// Mesma regra da collation das colunas de nome: sem maiúsculas, acentos e espaços nas pontas (D16)
+const chave = (setorId, nome) => `${setorId}:${chaveDeNome(nome)}`;
 
 const ativas = await equipesRepository.listarAtivasDosSetores(setoresDaPlanilha);
 const equipes = new Map(ativas.map((e) => [chave(e.setorId, e.nome), e.id]));
