@@ -10,6 +10,7 @@ const CAMPOS = {
   nome: true,
   slug: true,
   ativo: true,
+  exibirTvWall: true,
   criadoEm: true,
   atualizadoEm: true,
 };
