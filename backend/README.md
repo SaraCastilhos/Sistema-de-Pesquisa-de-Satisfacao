@@ -64,6 +64,24 @@ O `docker-compose.yml` cria um PostgreSQL 17 na porta **5433** do computador (pa
 
 Mudanças na estrutura do banco seguem a seção 4 de [`docs/padroes-banco-de-dados.md`](../docs/padroes-banco-de-dados.md): o `schema.prisma` e a migração andam juntos, e uma migração já aplicada nunca é editada.
 
+## Testes
+
+Os testes automáticos usam o banco `fhdod_teste` do Docker e o arquivo `.env.test`, com chaves fictícias. Na primeira vez:
+
+```powershell
+Copy-Item .env.test.example .env.test
+```
+
+Depois, com o Docker aberto:
+
+```powershell
+npm test
+```
+
+Antes da suíte, os testes aplicam as migrações no banco de teste (`prisma migrate deploy`). Cada arquivo de teste **apaga todas as tabelas** desse banco e recria os dados de referência. Por segurança, os testes só rodam num banco cujo nome contenha `test`: se o `.env.test` apontar para o banco de desenvolvimento, eles param antes de apagar qualquer coisa.
+
+A estratégia, os casos de teste (CT) e a cobertura exigida estão em [`docs/plano-e-relatorio-de-testes.md`](../docs/plano-e-relatorio-de-testes.md). Cada teste que cobre um caso do plano leva o identificador no nome, por exemplo `it('CT66 - ...')`.
+
 ## Comandos
 
 | Comando                 | O que faz                                                  |
@@ -87,12 +105,21 @@ backend/
 │   ├── app.js            # monta o Express (sem iniciar o servidor)
 │   ├── server.js         # inicia o servidor
 │   ├── config/           # variáveis de ambiente e Prisma Client
+│   ├── middlewares/      # validação, limites de requisição e tratamento de erros
+│   ├── repositories/     # repositories usados por vários módulos (auditoria)
+│   ├── utils/            # criptografia, telefone, sanitização, datas, cache e paginação
 │   ├── docs/             # parte comum do contrato OpenAPI e montagem do Swagger
 │   ├── routes/index.js   # registra as rotas de todos os módulos
 │   └── modules/          # um módulo por assunto, com um arquivo por camada
+├── tests/
+│   ├── unit/             # funções e services, sem banco
+│   ├── integration/      # rotas (Supertest) e restrições do banco, com o banco de teste
+│   └── helpers/          # app, limpeza do banco e fábricas de dados de teste
 ├── docker/init.sql       # cria o banco de teste na primeira vez que o Docker sobe
 ├── docker-compose.yml    # PostgreSQL local
-└── .env.example          # modelo das variáveis de ambiente
+├── jest.config.js        # configuração dos testes
+├── .env.example          # modelo das variáveis de ambiente
+└── .env.test.example     # modelo das variáveis dos testes (chaves fictícias)
 ```
 
 Cada módulo tem `<módulo>.routes.js`, `.controller.js`, `.service.js`, `.repository.js`, `.schemas.js` e `.openapi.yaml`. O contrato de cada módulo fica no próprio `.openapi.yaml` e é juntado aos demais na inicialização.
