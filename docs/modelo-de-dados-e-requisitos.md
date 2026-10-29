@@ -1,7 +1,7 @@
 # Modelo de Dados e Requisitos — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md), versão 1.10
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md), versão 1.11
 
 Este documento define como os dados do sistema são organizados no banco: a escolha do tipo de banco, as entidades e seus relacionamentos, o dicionário de dados, as regras de integridade e a ligação de cada tabela aos requisitos. Ele é a base do `schema.prisma`, dos scripts de criação e povoamento e da camada de repositórios do backend.
 
@@ -41,6 +41,7 @@ As convenções serão detalhadas em `padroes-banco-de-dados.md`. As principais,
 - Chave primária `id`; chave estrangeira `<tabela>_id` (ex.: `setor_id`).
 - Datas e horas com sufixo `_em` (`criado_em`); booleanos como adjetivo (`ativo`, `pulada`).
 - Valores de `ENUM` em maiúsculas (`SUPER_ADMIN`).
+- Nomes cadastrados pelo Super Admin (setor, turno, etapa e equipe) usam a collation `ignora_maiusculas_e_acentos`, que compara sem diferenciar maiúsculas nem acentos (D16).
 - Momentos (data com hora) sempre em `TIMESTAMPTZ`, gravados em UTC e convertidos para o fuso `America/Sao_Paulo` ao calcular datas e turnos. Datas sem hora usam `DATE`, e horários de turno, `TIME`.
 
 ---
@@ -117,7 +118,7 @@ Cada tipo de pergunta (RF22) grava em uma coluna própria: `valor_numero` (rosti
 Pular uma pergunta (RF03) grava uma resposta com `pulada = true` e sem valor. Isso mostra quais perguntas os pacientes evitam e permite retomar a sessão no ponto exato em que parou (RF13). As médias (`AVG`) ignoram essas linhas automaticamente, porque desconsideram valores nulos; as contagens de respostas filtram `pulada = false`.
 
 **D6 — Nada que tenha histórico é apagado.**
-Setores, turnos, equipes, usuários, perguntas e opções são **desativados** (`ativo = false`), nunca removidos (RF20, RF23, RN09). As chaves estrangeiras usam `ON DELETE RESTRICT`, então o banco recusa qualquer exclusão que deixaria uma resposta ou manifestação órfã (RN01, RN07). "Descartar" uma sessão no tablet (RF13) significa não continuá-la: as respostas já dadas permanecem e contam nos indicadores das etapas (RF07).
+Setores, turnos, etapas, equipes, usuários, perguntas e opções são **desativados** (`ativo = false`), nunca removidos (RF20, RF23, RN09). As chaves estrangeiras usam `ON DELETE RESTRICT`, então o banco recusa qualquer exclusão que deixaria uma resposta ou manifestação órfã (RN01, RN07). "Descartar" uma sessão no tablet (RF13) significa não continuá-la: as respostas já dadas permanecem e contam nos indicadores das etapas (RF07).
 
 Só há dois casos de exclusão física, ambos em tabelas de configuração que nenhuma resposta referencia por chave estrangeira: retirar um setor de um gestor (`gestor_setor`) e substituir linhas da escala ao importar de novo um mês (`escala`).
 
@@ -153,6 +154,14 @@ Como os turnos mudam com o tempo, a sessão guarda o **turno** (`turno_id`), e n
 
 **D14 — O tipo da manifestação da pesquisa começa vazio.**
 Quem classifica a manifestação é a Ouvidoria, não o paciente (RN12): o paciente tende a escolher o tipo pelo sentimento, e uma "sugestão" pode ser uma reclamação grave. Por isso `manifestacao.tipo` aceita vazio, e vazio significa "a classificar". A alternativa seria um valor `NAO_CLASSIFICADA` no tipo enumerado, mas isso misturaria "ainda não se sabe" com os tipos de verdade e exigiria excluí-lo de toda contagem por tipo. Duas restrições `CHECK` garantem a regra: só a origem `PESQUISA` chega sem tipo, e nenhum chamado é finalizado sem tipo. Assim, os indicadores por tipo (RF27) só ficam com a categoria "a classificar" enquanto o chamado está aberto.
+
+**D15 — As etapas da jornada são cadastradas pelo Super Admin.**
+As quatro etapas iniciais (Recepção, Triagem, Enfermagem e Médico) vêm do povoamento, mas o Super Admin pode criar, renomear, reordenar e desativar etapas (RF06, RF20). Assim, uma etapa nova, como Farmácia ou Laboratório, não exige mudança de código nem de banco. Como as demais tabelas com histórico (D6), a etapa nunca é apagada: `ativo = false` a retira da pesquisa, e as respostas e manifestações antigas continuam ligadas a ela nos indicadores. A pesquisa só oferece ao paciente as etapas ativas com pelo menos uma pergunta ativa no setor, para que ele nunca escolha uma etapa sem perguntas; essa regra depende da tabela `pergunta` e por isso fica no serviço da pesquisa. Pela mesma razão, uma pergunta não pode ser criada nem reativada em etapa desativada (RF22). O povoamento só cria as etapas iniciais quando a tabela está vazia: depois disso elas são do Super Admin, e recriar "Triagem" depois de uma renomeação violaria a restrição única de `ordem`.
+
+**D16 — Nomes cadastrados não diferenciam maiúsculas nem acentos.**
+Os nomes de setor, turno, etapa e equipe são digitados por pessoas e conferidos contra planilhas (RF21). Se "Recepção" e "RECEPCAO" fossem nomes diferentes, o dashboard mostraria dois setores com as respostas divididas, e a importação da escala não saberia a qual equipe ligar a linha. Por isso as quatro colunas `nome` usam uma *collation* ICU não determinística de nível 1 (`ignora_maiusculas_e_acentos`, locale `und-u-ks-level1`), que compara só as letras-base (RN13). As restrições únicas que já existiam passam a recusar o nome repetido, e uma busca por igualdade encontra o cadastro de qualquer forma que ele seja escrito; o nome continua gravado como foi digitado. Espaços e pontuação continuam contando, para que um erro de digitação como "Equipe  A" (dois espaços) não seja aceito em silêncio.
+
+Alternativas descartadas: verificar na aplicação antes de gravar deixaria passar dois cadastros simultâneos e teria de ser repetido em cada módulo; um índice único sobre `lower(nome)` não é representado pelo Prisma, que tentaria removê-lo; o tipo `citext` ignora maiúsculas, mas não acentos. A *collation* é uma propriedade da coluna: o Prisma não a descreve no `schema.prisma`, mas também não a remove (conferido com `prisma migrate diff`). A limitação é que colunas com essa *collation* não aceitam `LIKE`/`ILIKE` no PostgreSQL 17, então nenhuma consulta faz busca por trecho do nome (no Prisma: `contains`, `startsWith`, `endsWith`).
 
 ---
 
@@ -229,7 +238,7 @@ Unidade de atendimento com pesquisa própria (RF01, RF20).
 | Coluna | Tipo | Nulo | Restrições | Descrição |
 | --- | --- | --- | --- | --- |
 | `id` | `INTEGER` | Não | PK, autoincremento | Identificador |
-| `nome` | `VARCHAR(80)` | Não | UK | Nome exibido (ex.: "Pronto Atendimento") |
+| `nome` | `VARCHAR(80)` | Não | UK, sem diferenciar maiúsculas e acentos (D16) | Nome exibido (ex.: "Pronto Atendimento") |
 | `slug` | `VARCHAR(80)` | Não | UK; `CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$')` | Trecho da URL e do QR Code (ex.: `pronto-atendimento`) |
 | `ativo` | `BOOLEAN` | Não | padrão `true` | Setor desativado mostra "pesquisa indisponível" |
 | `criado_em` | `TIMESTAMPTZ` | Não | padrão `now()` | Data de cadastro |
@@ -244,7 +253,7 @@ Período de trabalho com horário de início e fim (RF20).
 | Coluna | Tipo | Nulo | Restrições | Descrição |
 | --- | --- | --- | --- | --- |
 | `id` | `INTEGER` | Não | PK, autoincremento | Identificador |
-| `nome` | `VARCHAR(40)` | Não | UK | Nome exibido (ex.: "Noite (19h–7h)") |
+| `nome` | `VARCHAR(40)` | Não | UK, sem diferenciar maiúsculas e acentos (D16) | Nome exibido (ex.: "Noite (19h–7h)") |
 | `hora_inicio` | `TIME` | Não | `CHECK (hora_inicio <> hora_fim)` | Início do turno |
 | `hora_fim` | `TIME` | Não | | Fim do turno; menor que o início quando atravessa a meia-noite (D13) |
 | `ativo` | `BOOLEAN` | Não | padrão `true` | Turno desativado não aparece em novas escalas |
@@ -264,18 +273,18 @@ Grupo de profissionais de plantão em um setor, identificado só pelo nome (RN04
 | --- | --- | --- | --- | --- |
 | `id` | `INTEGER` | Não | PK, autoincremento | Identificador |
 | `setor_id` | `INTEGER` | Não | FK → `setor` | Setor ao qual a equipe pertence |
-| `nome` | `VARCHAR(80)` | Não | | Nome da equipe (ex.: "Equipe A"), igual ao usado na planilha da escala |
+| `nome` | `VARCHAR(80)` | Não | Sem diferenciar maiúsculas e acentos (D16) | Nome da equipe (ex.: "Equipe A"), igual ao usado na planilha da escala |
 | `ativo` | `BOOLEAN` | Não | padrão `true` | Equipe desativada não é aceita em novas importações, mas continua nos indicadores dos meses em que trabalhou |
 | `criado_em` | `TIMESTAMPTZ` | Não | padrão `now()` | Data de cadastro |
 | `atualizado_em` | `TIMESTAMPTZ` | Não | atualizado pelo Prisma | Última alteração |
 
-Restrição única (`setor_id`, `nome`): o mesmo nome pode existir em setores diferentes, como equipes distintas.
+Restrição única (`setor_id`, `nome`), sem diferenciar maiúsculas e acentos (D16): o mesmo nome pode existir em setores diferentes, como equipes distintas.
 
-As equipes são **cadastradas pelo Super Admin** (RF20), e a importação da escala só aceita equipes cadastradas e ativas no setor da linha (RF21). A importação nunca cria uma equipe sozinha: se criasse, um erro de digitação na planilha ("Equipe  A", com dois espaços) geraria em silêncio uma equipe nova, e as notas daquele plantão ficariam divididas entre duas equipes no dashboard. A comparação ignora maiúsculas e espaços nas pontas, para que "equipe a" na planilha encontre "Equipe A".
+As equipes são **cadastradas pelo Super Admin** (RF20), e a importação da escala só aceita equipes cadastradas e ativas no setor da linha (RF21). A importação nunca cria uma equipe sozinha: se criasse, um erro de digitação na planilha ("Equipe  A", com dois espaços) geraria em silêncio uma equipe nova, e as notas daquele plantão ficariam divididas entre duas equipes no dashboard. A comparação ignora maiúsculas, acentos (pela *collation* da coluna, D16) e espaços nas pontas, para que "equipe a" na planilha encontre "Equipe A".
 
 Regras da aplicação:
 
-- O cadastro recusa um nome igual ao de outra equipe do mesmo setor, ignorando maiúsculas. Assim, cada nome da planilha corresponde a uma única equipe. A regra fica na aplicação porque o Prisma não representa índices únicos sobre expressões como `lower(nome)` e tentaria removê-los na migração seguinte.
+- O banco recusa um nome igual ao de outra equipe do mesmo setor, sem diferenciar maiúsculas nem acentos (D16). Assim, cada nome da planilha corresponde a uma única equipe. A aplicação só traduz essa recusa em `409`.
 - Renomear uma equipe mantém o histórico, porque a escala aponta para o identificador da equipe, e não para o nome. Depois de renomeada, as próximas planilhas usam o nome novo.
 - Uma equipe não muda de setor depois de criada. Se o hospital reorganizar as equipes, desativa-se a antiga e cadastra-se uma nova no outro setor, para que os indicadores passados continuem no setor certo.
 
@@ -315,13 +324,14 @@ Restrição única (`setor_id`, `competencia`). Guardar o mês como uma data, e 
 
 #### `etapa`
 
-Pontos de contato da jornada do paciente (RF06). Tabela de referência, preenchida pelo povoamento inicial e sem tela de edição.
+Pontos de contato da jornada do paciente (RF06). As etapas iniciais vêm do povoamento; depois, o Super Admin as cadastra, renomeia, reordena e desativa (RF20, D15).
 
 | Coluna | Tipo | Nulo | Restrições | Descrição |
 | --- | --- | --- | --- | --- |
 | `id` | `INTEGER` | Não | PK, autoincremento | Identificador |
-| `nome` | `VARCHAR(40)` | Não | UK | Recepção, Triagem, Enfermagem ou Médico |
+| `nome` | `VARCHAR(40)` | Não | UK, sem diferenciar maiúsculas e acentos (D16) | Nome da etapa (iniciais: Recepção, Triagem, Enfermagem e Médico) |
 | `ordem` | `SMALLINT` | Não | UK | Ordem de exibição na pesquisa |
+| `ativo` | `BOOLEAN` | Não | Padrão `true` | Etapa desativada sai da pesquisa e continua nos indicadores antigos (D6, D15) |
 
 #### `pergunta`
 
@@ -570,6 +580,8 @@ As regras ficam no banco sempre que podem ser expressas em uma única tabela. As
 | Nota geral de 0 a 10, gravada uma vez (RF03, RN01) | `CHECK` de faixa | Recusa uma segunda nota |
 | Valor coerente com o tipo da pergunta (RF22) | Exatamente um valor (`num_nonnulls`) | Coluna e faixa conforme o tipo |
 | Primeira pergunta da etapa é rostinho (RF04) | — | Validação ao ordenar e ativar |
+| Nomes de setor, turno, etapa e equipe sem repetição por maiúsculas ou acentos (RN13, D16) | Restrição única com *collation* `ignora_maiusculas_e_acentos` | Traduz a recusa em `409` |
+| Pesquisa só oferece etapas ativas com pergunta ativa no setor; pergunta não entra em etapa desativada (RF06, RF22, D15) | — | Filtro na pesquisa e validação no cadastro de perguntas |
 | Telefone só com consentimento (RN06) | `CHECK` | Fluxo de confirmação do RF10 |
 | Finalizar exige desfecho e apaga o telefone (RN07) | `CHECK` | Transação: status, anonimização e log juntos |
 | Tipo definido pela Ouvidoria; só a pesquisa chega sem tipo e só se finaliza com tipo (RN12, D14) | `CHECK` | A rota pública não aceita tipo; classificação com log (RNF11) |
@@ -602,7 +614,7 @@ O Prisma não descreve restrições `CHECK` no `schema.prisma`. Elas serão acre
 
 **Toda resposta válida conta na análise do hospital.** Uma sessão interrompida no meio entra no total de respostas e nos indicadores das etapas e perguntas que o paciente respondeu. Só não entra na nota média, no NPS e na distribuição das notas, porque esses indicadores são calculados a partir da própria nota geral, que ela não tem. Pela mesma razão, a taxa de adesão usa as respostas completas, como define o RF27. Sessões abertas sem nenhuma resposta não contam.
 
-Como a primeira pergunta de cada etapa é sempre um rostinho (RF04), toda etapa de todo setor tem pelo menos uma pergunta na mesma escala de 1 a 5. É isso que permite o ranking de etapas e setores do RF28 sem misturar escalas diferentes.
+Como a primeira pergunta de cada etapa é sempre um rostinho (RF04), toda etapa oferecida na pesquisa de um setor tem pelo menos uma pergunta na mesma escala de 1 a 5 (uma etapa sem perguntas no setor nem aparece ao paciente, D15). É isso que permite o ranking de etapas e setores do RF28 sem misturar escalas diferentes.
 
 O período dos filtros usa `data_atendimento`, e não a data da resposta: quem responde em casa no dia seguinte (RF12) é contado no dia em que foi atendido.
 
@@ -681,7 +693,7 @@ Nesse cenário, o banco cresce cerca de 150 MB por ano. O limite de armazenament
 | RF03 — Nota geral obrigatória | `sessao.nota_geral` (D1) |
 | RF03, RNF05 — Pular perguntas | `resposta.pulada` (D5) |
 | RF04, RF22 — Tipos de pergunta | `pergunta.tipo`, `opcao_pergunta`, colunas tipadas de `resposta` (D4) |
-| RF06 — Etapas vividas | `etapa`, `sessao_etapa`, `pergunta.etapa_id` |
+| RF06 — Etapas vividas | `etapa` (com `ativo`, D15), `sessao_etapa`, `pergunta.etapa_id` |
 | RF07, RN01 — Respostas acumulativas | `resposta` gravada a cada pergunta, sem exclusão (D6) |
 | RF08, RN05 — Final conforme a nota | `sessao.nota_geral`, `manifestacao` |
 | RF09 — Espaço para elogio, reclamação ou sugestão | `manifestacao.texto`, `etapa_id`, `profissional_citado` |
@@ -693,7 +705,8 @@ Nesse cenário, o banco cresce cerca de 150 MB por ano. O limite de armazenament
 | RF17, RN11 — Outros canais e foto do papel | `manifestacao.origem`, `registrada_por_id`, `anexo_manifestacao` |
 | RF18, RN08 — Elogios aprovados e melhorias no TV Wall | `manifestacao.texto_tv_wall`, `aprovada_tv_wall_*`, `melhoria` (D9) |
 | RF19 — Possível duplicata | `manifestacao.telefone_hash`, `possivel_duplicata` |
-| RF20, RN10 — Setores, turnos, equipes e gestores | `setor`, `turno`, `equipe`, `usuario`, `gestor_setor` |
+| RF20, RN10 — Setores, turnos, etapas, equipes e gestores | `setor`, `turno`, `etapa` (D15), `equipe`, `usuario`, `gestor_setor` |
+| RN13 — Nomes sem repetição por maiúsculas ou acentos | *Collation* `ignora_maiusculas_e_acentos` em `setor.nome`, `turno.nome`, `etapa.nome` e `equipe.nome` (D16) |
 | RF21, RN04 — Escala e avaliação por equipe | `equipe`, `escala` (D3, D12, D13) |
 | RF23, RN09 — Perguntas só desativadas | `pergunta.ativa`, FKs com `RESTRICT` |
 | RF24 — Termos de privacidade | `termo_privacidade` (D8) |

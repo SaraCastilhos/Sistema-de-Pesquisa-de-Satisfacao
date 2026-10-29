@@ -61,6 +61,14 @@ O Prisma gera automaticamente o nome das chaves e índices que ele cria. O proje
 
 O nome da restrição `CHECK` descreve a **regra**, não a coluna, porque ele aparece na mensagem de erro do banco. `ck_manifestacao_finalizacao` diz exatamente o que foi violado; `ck_manifestacao_desfecho` não.
 
+### 1.6 Collation dos nomes cadastrados
+
+As colunas `nome` de `setor`, `turno`, `etapa` e `equipe` usam a *collation* `ignora_maiusculas_e_acentos` (ICU, `und-u-ks-level1`, não determinística), criada na migração `nomes_sem_maiusculas_e_acentos` (D16 do modelo). Com ela, as restrições únicas e as comparações com `=` ignoram maiúsculas e acentos. Regras:
+
+- Uma coluna nova de nome cadastrado que precise da mesma regra recebe a *collation* na migração (`ALTER COLUMN ... TYPE VARCHAR(n) COLLATE "ignora_maiusculas_e_acentos"`), porque o `schema.prisma` não a descreve.
+- Nessas colunas, **nunca** use `LIKE`, `ILIKE` ou, no Prisma, `contains`, `startsWith`, `endsWith` e `mode: 'insensitive'`: o PostgreSQL 17 recusa `LIKE` em *collation* não determinística. Busque por igualdade (`where: { nome }`), que já ignora maiúsculas e acentos.
+- Não consulte se o nome existe antes de gravar: grave e traduza a recusa do banco (`P2002`) em `409`.
+
 ---
 
 ## 2. Tipos de dados
@@ -241,6 +249,7 @@ Regras para os valores gravados, aplicadas pela camada de serviços antes de che
 | Textos | Espaços do início e do fim removidos; texto vazio vira `NULL` quando a coluna aceita nulo |
 | E-mail | Gravado em minúsculas (garantido também por `CHECK`) |
 | Slug | Gerado do nome do setor: minúsculas, sem acentos, espaços viram `-` |
+| Nomes de setor, turno, etapa e equipe | Gravados como digitados (sem espaços nas pontas); únicos sem diferenciar maiúsculas nem acentos, pela *collation* da seção 1.6 |
 | Telefone | Normalizado para apenas dígitos, com DDI e DDD (ex.: `5551999999999`), antes de cifrar e de calcular o hash |
 | Textos livres do paciente | Sem tags HTML (RNF09) |
 | Ordem | Números sequenciais a partir de 1, sem lacunas, reorganizados ao mover itens |

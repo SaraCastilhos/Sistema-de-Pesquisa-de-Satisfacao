@@ -1,0 +1,5 @@
+# Contrato das rotas do módulo etapas, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Etapas
+    description: Etapas da jornada do paciente (RF06, RF20)
+paths: {}

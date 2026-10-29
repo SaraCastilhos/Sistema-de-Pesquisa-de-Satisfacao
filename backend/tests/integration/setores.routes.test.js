@@ -121,6 +121,15 @@ describe('POST /api/setores', () => {
     expect(resposta.body.erro.codigo).toBe('NOME_EM_USO');
   });
 
+  it('CT86 - nome que só muda em maiúsculas ou acentos = 409 NOME_EM_USO', async () => {
+    await criarSetor({ nome: 'Raio-X Pediátrico', slug: 'raio-x-pediatrico' });
+    const resposta = await criar(tokenSuperAdmin, {
+      nome: 'RAIO-X pediatrico',
+      slug: 'outro',
+    }).expect(409);
+    expect(resposta.body.erro.codigo).toBe('NOME_EM_USO');
+  });
+
   it('slug repetido = 409 SLUG_EM_USO, sem gravar auditoria', async () => {
     await criarSetor({ nome: 'Raio-X', slug: 'raio-x' });
     const resposta = await criar(tokenSuperAdmin, { nome: 'Raio X' }).expect(409);
