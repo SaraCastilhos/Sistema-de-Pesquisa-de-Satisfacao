@@ -3,7 +3,7 @@ const { prisma } = require('../../src/config/prisma');
 const { paraHoraBanco } = require('../../src/utils/datas');
 const { conferirBancoDeTeste } = require('./bancoDeTeste');
 
-// As 19 tabelas do modelo. A lista é fixa (sem montar SQL com texto vindo de fora, seção 6 de
+// As 16 tabelas do modelo. A lista é fixa (sem montar SQL com texto vindo de fora, seção 6 de
 // padroes-banco-de-dados.md); se o schema ganhar uma tabela, limparBanco avisa para atualizá-la.
 const TABELAS = [
   'usuario',
@@ -16,19 +16,16 @@ const TABELAS = [
   'atendimento_mensal',
   'etapa',
   'pergunta',
-  'opcao_pergunta',
   'sessao',
-  'sessao_etapa',
   'resposta',
   'termo_privacidade',
   'manifestacao',
   'tentativa_contato',
   'anexo_manifestacao',
-  'melhoria',
 ];
 
-// Mesmos dados de referência do prisma/seed.js
-const ETAPAS = ['Recepção', 'Triagem', 'Enfermagem', 'Médico'];
+// Mesmos dados de referência do prisma/seed.js. Etapas não entram: cada uma pertence a um
+// setor (D15), e cada teste cria as suas com a fábrica criarEtapa.
 const TURNOS = [
   { nome: 'Manhã', inicio: '07:00', fim: '13:00' },
   { nome: 'Tarde', inicio: '13:00', fim: '19:00' },
@@ -53,7 +50,7 @@ async function conferirTabelas() {
 }
 
 // Esvazia todas as tabelas, zera os identificadores e recria os dados de referência:
-// etapas, turnos, um Super Admin e os termos v1. Chame no beforeAll de cada arquivo de teste
+// turnos, um Super Admin e os termos v1. Chame no beforeAll de cada arquivo de teste
 // (e no beforeEach, quando um teste depender de um banco vazio).
 async function limparBanco() {
   conferirBancoDeTeste(process.env.DATABASE_URL);
@@ -61,14 +58,9 @@ async function limparBanco() {
 
   await prisma.$executeRaw`
     TRUNCATE TABLE usuario, gestor_setor, log_auditoria, setor, turno, equipe, escala,
-      atendimento_mensal, etapa, pergunta, opcao_pergunta, sessao, sessao_etapa, resposta,
-      termo_privacidade, manifestacao, tentativa_contato, anexo_manifestacao, melhoria
+      atendimento_mensal, etapa, pergunta, sessao, resposta, termo_privacidade, manifestacao,
+      tentativa_contato, anexo_manifestacao
     RESTART IDENTITY CASCADE`;
-
-  const etapas = [];
-  for (const [indice, nome] of ETAPAS.entries()) {
-    etapas.push(await prisma.etapa.create({ data: { nome, ordem: indice + 1 } }));
-  }
 
   const turnos = [];
   for (const turno of TURNOS) {
@@ -96,7 +88,7 @@ async function limparBanco() {
     data: { versao: 1, texto: 'Termos de privacidade (teste).', criadoPorId: superAdmin.id },
   });
 
-  return { etapas, turnos, superAdmin, termo };
+  return { turnos, superAdmin, termo };
 }
 
 module.exports = { limparBanco, SUPER_ADMIN_TESTE, CUSTO_BCRYPT_TESTE, TABELAS };

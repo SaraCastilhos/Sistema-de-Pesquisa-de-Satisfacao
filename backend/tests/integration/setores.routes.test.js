@@ -74,6 +74,7 @@ describe('POST /api/setores', () => {
       nome: 'Pronto Atendimento',
       slug: 'pronto-atendimento',
       ativo: true,
+      exibirTvWall: false,
       criadoEm: expect.any(String),
       atualizadoEm: expect.any(String),
     });
@@ -191,5 +192,35 @@ describe('PATCH /api/setores/:id', () => {
     const setor = await criarSetor();
     const { token } = await criarUsuario({ perfil: 'GESTOR', setorIds: [setor.id] });
     await alterar(token, setor.id, { nome: 'Outro nome' }).expect(403);
+  });
+});
+
+describe('CT88 - marcar o setor para o TV Wall (RF31)', () => {
+  it('CT88 - o setor nasce fora do TV Wall e o Super Admin o marca, com auditoria', async () => {
+    const setor = await criarSetor({ nome: 'Internação' });
+    expect((await listar(tokenSuperAdmin)).body[0]).toMatchObject({ exibirTvWall: false });
+
+    const resposta = await alterar(tokenSuperAdmin, setor.id, { exibirTvWall: true }).expect(200);
+    expect(resposta.body).toMatchObject({ exibirTvWall: true });
+    const log = await prisma.logAuditoria.findFirst({ where: { entidade: 'setor' } });
+    expect(log).toMatchObject({
+      acao: 'ALTERACAO',
+      dadosAnteriores: expect.objectContaining({ exibirTvWall: false }),
+      dadosNovos: expect.objectContaining({ exibirTvWall: true }),
+    });
+  });
+
+  it('CT88 - Gestor não marca o setor para o TV Wall, nem o próprio (403)', async () => {
+    const setor = await criarSetor();
+    const { token } = await criarUsuario({ perfil: 'GESTOR', setorIds: [setor.id] });
+    await alterar(token, setor.id, { exibirTvWall: true }).expect(403);
+    expect(await prisma.setor.findUnique({ where: { id: setor.id } })).toMatchObject({
+      exibirTvWall: false,
+    });
+  });
+
+  it('CT88 - exibirTvWall que não é booleano = 400', async () => {
+    const setor = await criarSetor();
+    await alterar(tokenSuperAdmin, setor.id, { exibirTvWall: 'sim' }).expect(400);
   });
 });

@@ -7,7 +7,8 @@ const { CUSTO_BCRYPT_TESTE } = require('./banco');
 
 // Fábricas de dados de teste: criam só o necessário para cada caso, com valores únicos,
 // para que cada teste deixe claro do que depende (seção 4.1 do plano de testes).
-// Use depois de limparBanco(), que cria etapas, turnos, Super Admin e termos v1.
+// Use depois de limparBanco(), que cria turnos, Super Admin e termos v1 (etapas não: cada uma
+// pertence a um setor e é criada com criarEtapa).
 let sequencia = 0;
 const proximo = () => ++sequencia;
 
@@ -25,40 +26,27 @@ async function criarEquipe({ setorId, nome, ativo = true } = {}) {
   });
 }
 
-// opcoes: textos das alternativas (múltipla escolha). Por padrão, duas alternativas.
-async function criarPergunta({
-  setorId,
-  etapaId,
-  tipo = 'ROSTINHO',
-  texto,
-  ordem,
-  ativa = true,
-  opcoes,
-} = {}) {
+// Etapa de um setor (D15); sem setorId, cria um setor novo
+async function criarEtapa({ setorId, nome, ordem, ativo = true, exibirTvWall = false } = {}) {
   const setor = setorId ?? (await criarSetor()).id;
-  const etapa =
-    etapaId === undefined && tipo !== 'DATA_PERIODO'
-      ? (await prisma.etapa.findFirst({ orderBy: { ordem: 'asc' } })).id
-      : etapaId;
-  const alternativas = opcoes ?? (tipo === 'MULTIPLA_ESCOLHA' ? ['Opção A', 'Opção B'] : []);
   const n = proximo();
-
-  return prisma.pergunta.create({
+  return prisma.etapa.create({
     data: {
       setorId: setor,
-      etapaId: etapa ?? null,
-      tipo,
-      texto: texto ?? `Pergunta ${n}?`,
+      nome: nome ?? `Etapa ${n}`,
       ordem: ordem ?? n,
-      ativa,
-      opcoes: {
-        create: alternativas.map((textoOpcao, indice) => ({
-          texto: textoOpcao,
-          ordem: indice + 1,
-        })),
-      },
+      ativo,
+      exibirTvWall,
     },
-    include: { opcoes: { orderBy: { ordem: 'asc' } } },
+  });
+}
+
+// Pergunta de rostinho (a única que existe, RF22); sem etapaId, cria uma etapa num setor novo
+async function criarPergunta({ etapaId, texto, ordem, ativa = true } = {}) {
+  const etapa = etapaId ?? (await criarEtapa()).id;
+  const n = proximo();
+  return prisma.pergunta.create({
+    data: { etapaId: etapa, texto: texto ?? `Pergunta ${n}?`, ordem: ordem ?? n, ativa },
   });
 }
 
@@ -69,7 +57,6 @@ async function criarSessao({
   nota = null,
   canal = 'CELULAR',
   dataAtendimento = hojeLocal(),
-  etapaIds = [],
 } = {}) {
   const setor = setorId ?? (await criarSetor()).id;
   const turno =
@@ -86,7 +73,6 @@ async function criarSessao({
       notaGeral: nota,
       iniciadaEm: agora,
       concluidaEm: nota === null ? null : agora,
-      etapas: { create: etapaIds.map((etapaId) => ({ etapaId })) },
     },
   });
 }
@@ -127,6 +113,7 @@ async function criarUsuario({
 module.exports = {
   criarSetor,
   criarEquipe,
+  criarEtapa,
   criarPergunta,
   criarSessao,
   criarUsuario,
