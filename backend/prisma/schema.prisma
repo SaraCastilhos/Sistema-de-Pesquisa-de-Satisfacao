@@ -23,16 +23,6 @@ enum PerfilUsuario {
   @@map("perfil_usuario")
 }
 
-enum TipoPergunta {
-  ROSTINHO
-  ESCALA
-  SIM_NAO
-  MULTIPLA_ESCOLHA
-  DATA_PERIODO
-
-  @@map("tipo_pergunta")
-}
-
 enum CanalResposta {
   CELULAR
   TABLET
@@ -110,10 +100,8 @@ model Usuario {
   atendimentosInformados   AtendimentoMensal[]
   termosCriados            TermoPrivacidade[]
   manifestacoesRegistradas Manifestacao[]      @relation("ManifestacaoRegistradaPor")
-  manifestacoesAprovadas   Manifestacao[]      @relation("ManifestacaoAprovadaTvWallPor")
   tentativasContato        TentativaContato[]
   anexosEnviados           AnexoManifestacao[]
-  melhorias                Melhoria[]
 
   @@map("usuario")
 }
@@ -157,6 +145,8 @@ model Setor {
   nome         String   @unique @db.VarChar(80)
   slug         String   @unique @db.VarChar(80)
   ativo        Boolean  @default(true)
+  // Marcado pelo Super Admin para aparecer no TV Wall (RF31, D17)
+  exibirTvWall Boolean  @default(false) @map("exibir_tv_wall")
   criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
   atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
 
@@ -164,7 +154,7 @@ model Setor {
   equipes       Equipe[]
   escalas       Escala[]
   atendimentos  AtendimentoMensal[]
-  perguntas     Pergunta[]
+  etapas        Etapa[]
   sessoes       Sessao[]
   manifestacoes Manifestacao[]
 
@@ -185,7 +175,6 @@ model Turno {
 
   escalas       Escala[]
   sessoes       Sessao[]
-  respostas     Resposta[]
   manifestacoes Manifestacao[]
 
   @@map("turno")
@@ -249,52 +238,41 @@ model AtendimentoMensal {
 // ---------------------------------------------------------------------------
 
 model Etapa {
-  id    Int     @id @default(autoincrement())
+  id           Int     @id @default(autoincrement())
+  // Cada setor tem as próprias etapas (D15)
+  setorId      Int     @map("setor_id")
   // Collation ignora_maiusculas_e_acentos (migração nomes_sem_maiusculas_e_acentos, D16):
-  // único sem diferenciar maiúsculas nem acentos; nunca use contains/startsWith neste campo
-  nome  String  @unique @db.VarChar(40)
-  ordem Int     @unique @db.SmallInt
+  // único no setor sem diferenciar maiúsculas nem acentos; nunca use contains/startsWith neste campo
+  nome         String  @db.VarChar(40)
+  ordem        Int     @db.SmallInt
   // Etapa desativada sai da pesquisa e continua nos indicadores antigos (D15)
-  ativo Boolean @default(true)
+  ativo        Boolean @default(true)
+  // Marcada pelo Super Admin para aparecer no TV Wall (RF31, D17)
+  exibirTvWall Boolean @default(false) @map("exibir_tv_wall")
 
+  setor         Setor          @relation(fields: [setorId], references: [id], onDelete: Restrict)
   perguntas     Pergunta[]
-  sessoes       SessaoEtapa[]
   manifestacoes Manifestacao[]
 
+  @@unique([setorId, nome])
+  @@unique([setorId, ordem])
   @@map("etapa")
 }
 
+// Toda pergunta é um rostinho de 1 a 5 (RF04, RF22). O setor vem pela etapa (D15)
 model Pergunta {
-  id           Int          @id @default(autoincrement())
-  setorId      Int          @map("setor_id")
-  // Vazio nas perguntas gerais, como a de data e período
-  etapaId      Int?         @map("etapa_id")
-  texto        String       @db.VarChar(200)
-  tipo         TipoPergunta
-  ordem        Int          @db.SmallInt
-  ativa        Boolean      @default(true)
-  criadoEm     DateTime     @default(now()) @map("criado_em") @db.Timestamptz
-  atualizadoEm DateTime     @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+  id           Int      @id @default(autoincrement())
+  etapaId      Int      @map("etapa_id")
+  texto        String   @db.VarChar(200)
+  ordem        Int      @db.SmallInt
+  ativa        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
 
-  setor     Setor           @relation(fields: [setorId], references: [id], onDelete: Restrict)
-  etapa     Etapa?          @relation(fields: [etapaId], references: [id], onDelete: Restrict)
-  opcoes    OpcaoPergunta[]
+  etapa     Etapa      @relation(fields: [etapaId], references: [id], onDelete: Restrict)
   respostas Resposta[]
 
   @@map("pergunta")
-}
-
-model OpcaoPergunta {
-  id         Int     @id @default(autoincrement())
-  perguntaId Int     @map("pergunta_id")
-  texto      String  @db.VarChar(100)
-  ordem      Int     @db.SmallInt
-  ativa      Boolean @default(true)
-
-  pergunta  Pergunta   @relation(fields: [perguntaId], references: [id], onDelete: Restrict)
-  respostas Resposta[]
-
-  @@map("opcao_pergunta")
 }
 
 model Sessao {
@@ -311,7 +289,6 @@ model Sessao {
 
   setor         Setor          @relation(fields: [setorId], references: [id], onDelete: Restrict)
   turno         Turno          @relation(fields: [turnoId], references: [id], onDelete: Restrict)
-  etapas        SessaoEtapa[]
   respostas     Resposta[]
   manifestacoes Manifestacao[]
 
@@ -320,33 +297,17 @@ model Sessao {
   @@map("sessao")
 }
 
-model SessaoEtapa {
-  sessaoId String @map("sessao_id") @db.Uuid
-  etapaId  Int    @map("etapa_id")
-
-  sessao Sessao @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
-  etapa  Etapa  @relation(fields: [etapaId], references: [id], onDelete: Restrict)
-
-  @@id([sessaoId, etapaId])
-  @@map("sessao_etapa")
-}
-
 model Resposta {
-  id            BigInt    @id @default(autoincrement())
-  sessaoId      String    @map("sessao_id") @db.Uuid
-  perguntaId    Int       @map("pergunta_id")
-  pulada        Boolean   @default(false)
-  valorNumero   Int?      @map("valor_numero") @db.SmallInt
-  valorBooleano Boolean?  @map("valor_booleano")
-  opcaoId       Int?      @map("opcao_id")
-  valorData     DateTime? @map("valor_data") @db.Date
-  turnoId       Int?      @map("turno_id")
-  respondidaEm  DateTime  @default(now()) @map("respondida_em") @db.Timestamptz
+  id           BigInt   @id @default(autoincrement())
+  sessaoId     String   @map("sessao_id") @db.Uuid
+  perguntaId   Int      @map("pergunta_id")
+  pulada       Boolean  @default(false)
+  // Rostinho de 1 a 5; vazio quando a pergunta foi pulada (D4, D5)
+  valorNumero  Int?     @map("valor_numero") @db.SmallInt
+  respondidaEm DateTime @default(now()) @map("respondida_em") @db.Timestamptz
 
-  sessao   Sessao         @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
-  pergunta Pergunta       @relation(fields: [perguntaId], references: [id], onDelete: Restrict)
-  opcao    OpcaoPergunta? @relation(fields: [opcaoId], references: [id], onDelete: Restrict)
-  turno    Turno?         @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  sessao   Sessao   @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
+  pergunta Pergunta @relation(fields: [perguntaId], references: [id], onDelete: Restrict)
 
   @@unique([sessaoId, perguntaId])
   @@index([perguntaId])
@@ -371,44 +332,39 @@ model TermoPrivacidade {
 }
 
 model Manifestacao {
-  id                  Int                @id @default(autoincrement())
-  origem              OrigemManifestacao
-  sessaoId            String?            @map("sessao_id") @db.Uuid
-  registradaPorId     Int?               @map("registrada_por_id")
+  id                 Int                @id @default(autoincrement())
+  origem             OrigemManifestacao
+  sessaoId           String?            @map("sessao_id") @db.Uuid
+  registradaPorId    Int?               @map("registrada_por_id")
   // Vazio = a classificar: quem define o tipo é a Ouvidoria (RN12, D14)
-  tipo                TipoManifestacao?
-  setorId             Int                @map("setor_id")
-  etapaId             Int?               @map("etapa_id")
-  dataOcorrencia      DateTime           @map("data_ocorrencia") @db.Date
-  turnoId             Int?               @map("turno_id")
-  texto               String?
-  profissionalCitado  String?            @map("profissional_citado") @db.VarChar(120)
+  tipo               TipoManifestacao?
+  setorId            Int                @map("setor_id")
+  etapaId            Int?               @map("etapa_id")
+  dataOcorrencia     DateTime           @map("data_ocorrencia") @db.Date
+  turnoId            Int?               @map("turno_id")
+  texto              String?
+  profissionalCitado String?            @map("profissional_citado") @db.VarChar(120)
   // Continua verdadeiro depois da anonimização (D7)
-  pediuRetorno        Boolean            @default(false) @map("pediu_retorno")
-  telefoneCifrado     String?            @map("telefone_cifrado")
-  telefoneHash        String?            @map("telefone_hash") @db.Char(64)
-  termoPrivacidadeId  Int?               @map("termo_privacidade_id")
-  consentimentoEm     DateTime?          @map("consentimento_em") @db.Timestamptz
-  status              StatusManifestacao @default(NOVA)
-  desfecho            String?
-  finalizadaEm        DateTime?          @map("finalizada_em") @db.Timestamptz
-  possivelDuplicata   Boolean            @default(false) @map("possivel_duplicata")
-  // Texto editado exibido no TV Wall; o texto original nunca muda (D9)
-  textoTvWall         String?            @map("texto_tv_wall") @db.VarChar(300)
-  aprovadaTvWallEm    DateTime?          @map("aprovada_tv_wall_em") @db.Timestamptz
-  aprovadaTvWallPorId Int?               @map("aprovada_tv_wall_por_id")
-  criadoEm            DateTime           @default(now()) @map("criado_em") @db.Timestamptz
-  atualizadoEm        DateTime           @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
+  pediuRetorno       Boolean            @default(false) @map("pediu_retorno")
+  telefoneCifrado    String?            @map("telefone_cifrado")
+  telefoneHash       String?            @map("telefone_hash") @db.Char(64)
+  termoPrivacidadeId Int?               @map("termo_privacidade_id")
+  consentimentoEm    DateTime?          @map("consentimento_em") @db.Timestamptz
+  status             StatusManifestacao @default(NOVA)
+  desfecho           String?
+  finalizadaEm       DateTime?          @map("finalizada_em") @db.Timestamptz
+  possivelDuplicata  Boolean            @default(false) @map("possivel_duplicata")
+  criadoEm           DateTime           @default(now()) @map("criado_em") @db.Timestamptz
+  atualizadoEm       DateTime           @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
 
-  sessao            Sessao?             @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
-  registradaPor     Usuario?            @relation("ManifestacaoRegistradaPor", fields: [registradaPorId], references: [id], onDelete: Restrict)
-  setor             Setor               @relation(fields: [setorId], references: [id], onDelete: Restrict)
-  etapa             Etapa?              @relation(fields: [etapaId], references: [id], onDelete: Restrict)
-  turno             Turno?              @relation(fields: [turnoId], references: [id], onDelete: Restrict)
-  termoPrivacidade  TermoPrivacidade?   @relation(fields: [termoPrivacidadeId], references: [id], onDelete: Restrict)
-  aprovadaTvWallPor Usuario?            @relation("ManifestacaoAprovadaTvWallPor", fields: [aprovadaTvWallPorId], references: [id], onDelete: Restrict)
-  tentativas        TentativaContato[]
-  anexos            AnexoManifestacao[]
+  sessao           Sessao?             @relation(fields: [sessaoId], references: [id], onDelete: Restrict)
+  registradaPor    Usuario?            @relation("ManifestacaoRegistradaPor", fields: [registradaPorId], references: [id], onDelete: Restrict)
+  setor            Setor               @relation(fields: [setorId], references: [id], onDelete: Restrict)
+  etapa            Etapa?              @relation(fields: [etapaId], references: [id], onDelete: Restrict)
+  turno            Turno?              @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  termoPrivacidade TermoPrivacidade?   @relation(fields: [termoPrivacidadeId], references: [id], onDelete: Restrict)
+  tentativas       TentativaContato[]
+  anexos           AnexoManifestacao[]
 
   @@index([status, criadoEm])
   @@index([setorId, dataOcorrencia])
@@ -445,20 +401,4 @@ model AnexoManifestacao {
   enviadoPor   Usuario      @relation(fields: [enviadoPorId], references: [id], onDelete: Restrict)
 
   @@map("anexo_manifestacao")
-}
-
-model Melhoria {
-  id           Int      @id @default(autoincrement())
-  titulo       String   @db.VarChar(120)
-  descricao    String?  @db.VarChar(300)
-  // DATE: só o dia em que a melhoria foi feita
-  realizadaEm  DateTime @map("realizada_em") @db.Date
-  publicada    Boolean  @default(false)
-  criadaPorId  Int      @map("criada_por_id")
-  criadoEm     DateTime @default(now()) @map("criado_em") @db.Timestamptz
-  atualizadoEm DateTime @default(now()) @updatedAt @map("atualizado_em") @db.Timestamptz
-
-  criadaPor Usuario @relation(fields: [criadaPorId], references: [id], onDelete: Restrict)
-
-  @@map("melhoria")
 }
