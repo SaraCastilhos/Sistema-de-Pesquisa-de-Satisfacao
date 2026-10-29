@@ -1,7 +1,7 @@
 # Plano e Relatório de Testes — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 (plano) — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.11 e [Arquitetura do Backend](arquitetura-backend.md)
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.12 e [Arquitetura do Backend](arquitetura-backend.md)
 
 Este documento tem duas partes. A **Parte 1** é o plano: a estratégia, os ambientes e os casos de teste que comprovam cada requisito. A **Parte 2** é o relatório de execução, preenchido conforme os testes são executados, com os resultados, a cobertura e os defeitos encontrados.
 
@@ -79,7 +79,7 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 
 ## 6. Casos de teste
 
-**Níveis:** U = unitário; B = banco de dados; I = integração; M = manual. Os casos automáticos ficam nos arquivos de teste com o identificador no nome (ex.: `it('CT07 - recusa a segunda nota da mesma sessão', ...)`), o que liga cada teste a este plano. Os identificadores nunca são renumerados: casos incluídos depois recebem o próximo número livre, mesmo que fiquem fora da ordem da tabela.
+**Níveis:** U = unitário; B = banco de dados; I = integração; M = manual. Os casos automáticos ficam nos arquivos de teste com o identificador no nome (ex.: `it('CT07 - recusa a segunda nota da mesma sessão', ...)`), o que liga cada teste a este plano. Os identificadores nunca são renumerados: casos incluídos depois recebem o próximo número livre, mesmo que fiquem fora da ordem da tabela. Um caso que deixa de valer continua na tabela, marcado como removido e com o motivo, e o número não é reaproveitado.
 
 ### 6.1 Pesquisa do paciente
 
@@ -93,23 +93,23 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT06 | RF07 | I | Responder uma pergunta | `201`; a resposta conta imediatamente nos indicadores |
 | CT07 | RF13 | I | Enviar duas vezes a mesma pergunta na mesma sessão | Segunda tentativa: `409`; uma única resposta gravada |
 | CT08 | RF03 | I | Pular uma pergunta | Resposta com `pulada = true` e sem valor |
-| CT09 | RF22 | I | Enviar valor incompatível (rostinho 7, escala 11, alternativa de outra pergunta) | `400` ou `422`; nada gravado |
-| CT10 | RF06 | I | Responder pergunta de uma etapa que o paciente não marcou | `422` |
-| CT11 | RN03 | I | Responder a pergunta de data e período | Sessão passa a ter a data e o turno informados e origem `INFORMADO` |
+| CT09 | RF22 | I | Enviar valor fora do rostinho (0 e 6) e resposta não pulada sem valor | `400`; nada gravado |
+| CT10 | RF06 | — | **Removido na v1.12**: o paciente não escolhe mais as etapas que viveu (RF06 v1.12) | — |
+| CT11 | RN03 | I | Informar a data e o período pela tela do celular (`PUT /api/publico/sessoes/:id/atendimento`); repetir; tentar numa sessão de tablet | Sessão passa a ter a data e o turno informados e origem `INFORMADO`; a segunda vez dá `409`; no tablet, `422` |
 | CT12 | RF03, RN01 | I | Enviar a nota geral duas vezes | Primeira: `200`; segunda: `409`; a primeira nota permanece |
 | CT13 | RF13 | I | Responder em sessão aberta há mais de 12 horas | `409` |
 | CT14 | RF08, RN05 | M | Nota 0 a 6; depois nota 7 a 10 | 0–6 abre o espaço da Ouvidoria; 7–10 pergunta se alguém fez diferença |
 | CT15 | RF10, RN06 | I | Manifestação com telefone e consentimento | Telefone gravado cifrado, hash gravado, versão dos termos registrada, status `NOVA` |
 | CT16 | RF10, RN06 | I | Manifestação com telefone, sem consentimento | `400`; nenhum telefone gravado |
-| CT17 | RF10 | M | Escrever uma manifestação, informar telefone, tocar em "Cancelar" e confirmar | Manifestação inteira descartada: nada é enviado à API (nem texto nem telefone); pesquisa segue para o agradecimento |
-| CT18 | RF11 | M | Concluir a pesquisa no tablet | Volta ao início sozinha após 8 s; o botão "Nova pesquisa" volta na hora |
+| CT17 | RF10 | M | Tocar em "Enviar" com a mensagem e o telefone vazios; tocar em "Voltar"; tocar em "Enviar" de novo e em "Encerrar sem mensagem" | A tela pergunta se a pessoa quer encerrar sem mensagem; "Voltar" mantém a tela; "Encerrar sem mensagem" segue para o agradecimento sem enviar nada à API |
+| CT18 | RF11 | M | Concluir a pesquisa no tablet e no celular | No tablet, volta ao início sozinha após 8 s; no celular, a tela fica parada; não há botão "Nova pesquisa" |
 | CT19 | RF13 | M | Celular: abrir de novo a pesquisa do mesmo setor em menos de 12 h | Mensagem "Você já respondeu hoje", com opção de complementar |
 | CT20 | RF13 | M | Tablet: 2 minutos sem toque no meio da pesquisa | Tela "Continuar pesquisa" ou "Nova pesquisa"; "Continuar" retoma no mesmo ponto |
-| CT21 | RF04, RF05 | M | Percorrer a pesquisa inteira | Uma pergunta por tela; primeira pergunta de cada etapa é rostinho; nenhum contador ou barra de progresso |
+| CT21 | RF04, RF05, RF06 | M | Percorrer a pesquisa inteira | Uma pergunta por tela; todas as perguntas são rostinhos, menos a nota final; a pesquisa passa por todas as etapas do setor sem perguntar quais o paciente viveu; nenhum contador ou barra de progresso |
 | CT22 | RNF05 | M | 5 pessoas que não conhecem o sistema respondem a pesquisa | Cada uma conclui em até 1 minuto; pular custa 1 toque |
 | CT76 | RF10, RN06 | M | Informar telefone e tocar em "Enviar" sem marcar a autorização; depois apagar o telefone e enviar | Primeiro: aviso de autorização pendente, nada é enviado e a tela não muda; segundo: manifestação enviada anônima |
 | CT77 | RF09, RN12 | I | Enviar uma manifestação pela pesquisa; depois enviar outra com o campo `tipo` | Primeira gravada com `tipo` vazio (a classificar) e status `NOVA`; segunda `400`, pois o campo não existe no contrato |
-| CT84 | RF06, D15 | I | Buscar a pesquisa de um setor com uma etapa desativada e outra ativa mas sem perguntas no setor; tentar escolher cada uma delas na sessão | As duas ficam fora da pesquisa; escolhê-las na sessão dá `422` |
+| CT84 | RF06, D15 | I | Buscar a pesquisa de um setor com uma etapa desativada e outra ativa mas sem perguntas ativas; responder uma pergunta da etapa desativada e uma de outro setor | As duas etapas ficam fora da pesquisa; as duas respostas dão `422` |
 
 ### 6.2 Ouvidoria
 
@@ -126,11 +126,11 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT31 | RF16 | I | Pedido de retorno com status `NOVA` há mais de 48 horas úteis | Aparece em `/alertas`; após a primeira tentativa, sai do alerta |
 | CT32 | RF17, RN12 | I | Registrar manifestação de outro canal; depois registrar outra sem tipo | Primeira gravada com `registrada_por_id`, origem e tipo corretos e o mesmo fluxo de status; segunda `400` |
 | CT33 | RF17 | I | Anexar foto PNG de 200 KB; depois arquivo PDF; depois imagem de 400 KB; depois a 4ª foto | Primeira aceita; as demais recusadas |
-| CT34 | RF18, RN08 | I | Aprovar um elogio com texto editado; tentar aprovar uma reclamação | Elogio aparece no TV Wall com o texto editado; reclamação recusada |
+| CT34 | RF18 | — | **Removido na v1.12**: a aprovação de elogios para o TV Wall saiu do sistema (RF18 removido) | — |
 | CT35 | RF19 | I | Duas manifestações com o mesmo telefone (formatado de jeitos diferentes) e setor em 24 h | A segunda é gravada e marcada como possível duplicata |
 | CT78 | RN12, RNF11 | I | Classificar uma manifestação da pesquisa como reclamação; corrigir para sugestão; tentar deixá-la sem tipo | Tipo gravado nas duas primeiras, cada uma com uma linha `ALTERACAO` no log com o tipo anterior e o novo; a terceira `400` |
 | CT79 | RN12 | I | Encerrar com desfecho um chamado ainda a classificar | `422`; nada alterado |
-| CT80 | RN12, RF18 | I | Reclassificar como reclamação um elogio aprovado para o TV Wall; retirar a aprovação e repetir | Primeira `409`, tipo inalterado; segunda aceita |
+| CT80 | RN12, RF18 | — | **Removido na v1.12**: sem aprovação de elogios, nenhum tipo fica travado | — |
 
 ### 6.3 Administração e acesso
 
@@ -150,12 +150,13 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT73 | RF20, RN04 | I | Renomear uma equipe que já tem escala | Os indicadores passados aparecem com o nome novo, sem perder nenhuma resposta |
 | CT74 | RF20, RN13 | I | Cadastrar "equipe a" e "Équipe A" num setor que já tem "Equipe A"; cadastrar "Equipe A" em outro setor | Os dois primeiros: `409`; o terceiro: aceito |
 | CT75 | RF20 | I | Gestor tenta cadastrar, renomear ou desativar uma equipe | `403` |
-| CT45 | RF22, RF04 | U | Reordenar de modo que a primeira pergunta de uma etapa não seja rostinho | `422` |
+| CT45 | RF22, RF04 | — | **Removido na v1.12**: toda pergunta é um rostinho | — |
 | CT46 | RF23, RN09 | I/B | Desativar pergunta com respostas; tentar excluí-la direto no banco | Pergunta some da pesquisa e as respostas continuam nos indicadores; exclusão recusada pelo banco |
-| CT47 | RF22 | U | Mudar o tipo de uma pergunta que já tem respostas | `422` |
+| CT47 | RF22 | — | **Removido na v1.12**: a pergunta não tem mais tipo | — |
 | CT48 | RF24, RN06 | I | Publicar nova versão dos termos | Nova versão vigente; manifestações antigas continuam ligadas à versão aceita |
 | CT49 | RNF11 | I | Alterar uma pergunta, um usuário e uma manifestação | Uma linha no log para cada alteração, com usuário, ação e data |
-| CT83 | RF20, D15 | I | Super Admin cria, renomeia, reordena e desativa uma etapa; Gestor tenta cadastrar e lista as etapas | Super Admin: todas as operações aceitas, sem exclusão, com auditoria; Gestor: lista com `200` e `403` ao gravar |
+| CT83 | RF20, D15 | I | Super Admin cria, renomeia, reordena e desativa uma etapa de um setor; Gestor lista as etapas do seu setor, tenta cadastrar e tenta listar as de outro setor | Super Admin: todas as operações aceitas, sem exclusão, com auditoria; Gestor: lista com `200`, `403` ao gravar e `403` no setor de outro |
+| CT87 | RF20, D15 | I/B | Cadastrar "medico" num setor que já tem "Médico"; cadastrar "Médico" em outro setor | O primeiro é recusado (`409` pela API, restrição única no banco); o segundo é aceito |
 | CT85 | RF22, D15 | I | Criar uma pergunta numa etapa desativada; reativar uma pergunta de etapa desativada | `422` nos dois casos |
 
 ### 6.4 Indicadores e TV Wall
@@ -166,21 +167,23 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT51 | RF27 | U | NPS com notas 10, 9, 8, 7 e 3 | 20 |
 | CT52 | RF27 | I | Taxa de adesão de um setor com atendimentos informados e de outro sem | Percentual no primeiro; "atendimentos não informados" no segundo |
 | CT53 | RF28, RN04 | I | Nota por equipe após importar a escala | Cada sessão ligada à equipe do seu setor, data e turno, inclusive as gravadas antes da importação |
-| CT54 | RF28 | I | Avaliação por etapa | Média dos rostinhos por etapa, incluindo pesquisas não concluídas |
+| CT54 | RF28 | I | Avaliação por etapa | Índice de satisfação e média dos rostinhos de cada etapa, com o setor, incluindo pesquisas não concluídas |
 | CT55 | RF29 | I | Exportar Excel com filtros | Planilha só com os dados filtrados, sem telefones nem profissionais citados; textos começando com `=` gravados como texto |
 | CT56 | RF29 | I | Gerar relatório mensal em PDF | Arquivo PDF válido com os indicadores do mês |
-| CT57 | RF30, RN08 | I | Rota do TV Wall | Apenas nota, total, evolução de 6 meses, elogios aprovados (texto editado) e melhorias publicadas; nenhum setor, turno, equipe, telefone ou texto não aprovado |
-| CT58 | RF30 | M | TV Wall sem elogios aprovados nem melhorias | Esses painéis não entram no rodízio; os demais alternam a cada 15 s |
+| CT57 | RF30, RN08 | I | Rota do TV Wall | Só porcentagens (de 0 a 100): satisfação geral, adesão, evolução de 6 meses e os setores e etapas marcados; nenhuma contagem, turno, equipe, manifestação, nome ou telefone |
+| CT58 | RF30, RF31 | M | TV Wall sem nenhum setor nem etapa marcados | Os painéis de setor e de etapa não entram no rodízio; os demais alternam a cada 15 s |
 | CT59 | RNF07 | I | Duas leituras do resumo sem gravação entre elas; depois uma gravação | Segunda leitura vem do cache, sem consultar o banco; após a gravação, o valor é recalculado |
 | CT60 | RNF07 | M | Responder uma pesquisa com o dashboard e o TV Wall abertos | A resposta aparece nas duas telas em até 5 s |
 | CT81 | RF27, RN12 | I | Manifestações por tipo com elogios, reclamações e uma manifestação a classificar | Contagem de cada tipo mais a categoria "a classificar" com 1 |
-| CT82 | RF30, RN08 | M | Abrir o TV Wall com `/tv-wall/pronto-atendimento` e depois só com `/tv-wall` | No primeiro, o QR Code abre a pesquisa do Pronto Atendimento; no segundo, o painel do QR Code não entra no rodízio; os demais painéis são iguais nos dois, sem nenhum dado do setor |
+| CT82 | RF30, RN08 | M | Abrir o TV Wall com `/tv-wall/pronto-atendimento` e depois só com `/tv-wall` | No primeiro, o QR Code abre a pesquisa do Pronto Atendimento; no segundo, o painel do QR Code não entra no rodízio; os demais painéis são iguais nos dois |
+| CT88 | RF31, RN08 | I | Marcar um setor e uma etapa para o TV Wall (como Super Admin e como Gestor); deixar um setor marcado com menos de 10 avaliações no mês | O Gestor recebe `403`; os marcados com o mínimo aparecem no TV Wall; o de menos de 10 avaliações e os não marcados ficam fora; desmarcar tira na leitura seguinte |
+| CT89 | RF30 | U | Índice de satisfação com as notas 9, 7, 6 e 3, e com os rostinhos 5, 4 e 3 e um pulo | 50% e 67%; o pulo não conta |
 
 ### 6.5 Banco de dados, segurança e qualidade
 
 | ID | Requisito | Nível | Caso | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| CT61 | Seção 6 do modelo | B | Suíte de restrições: nota fora da faixa, resposta pulada com valor, telefone sem consentimento, finalização sem anonimização, manifestação de outro canal sem tipo, finalização sem tipo, anexo acima do limite, entre outras | O banco recusa todos os registros inválidos e aceita os válidos |
+| CT61 | Seção 6 do modelo | B | Suíte de restrições: nota fora da faixa, rostinho fora de 1 a 5, resposta pulada com valor ou respondida sem valor, telefone sem consentimento, finalização sem anonimização, manifestação de outro canal sem tipo, finalização sem tipo, anexo acima do limite, entre outras | O banco recusa todos os registros inválidos e aceita os válidos |
 | CT62 | RNF09 | I | Enviar `'; DROP TABLE sessao; --` em campos de texto e filtros | Tratado como texto comum; nenhuma tabela afetada |
 | CT63 | RNF09 | I | Enviar `<script>alert(1)</script>` no texto da manifestação | Gravado sem as tags HTML |
 | CT64 | RNF09 | I | Enviar campos que não existem no contrato da API | `400` |
@@ -190,7 +193,7 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT68 | RNF04 | M | Auditoria de acessibilidade da pesquisa | Lighthouse Acessibilidade ≥ 90; botões ≥ 48 × 48 px; fonte ≥ 18 px; contraste ≥ 4,5:1; rostinhos com rótulo |
 | CT69 | RNF07 | M | Lighthouse da pesquisa no celular com rede 4G simulada, API já ativa | Página utilizável em menos de 3 s |
 | CT70 | RNF03 | M | Abrir cada tela nas resoluções da seção 4.2 | Sem rolagem horizontal, sem textos cortados, sem elementos sobrepostos |
-| CT86 | RN13, D16 | B/I | Gravar direto no banco setor, turno e etapa que só mudam em maiúsculas ou acentos ("RECEPCAO central" com "Recepção Central" já cadastrado); equipe repetida no mesmo setor e em outro; "Raio X" com "Raio-X" já cadastrado; buscar "PRONTO atendimento"; criar pela API setor que só muda em maiúsculas ou acentos | Repetições recusadas pelo banco; mesma equipe em outro setor aceita; "Raio X" aceito; a busca encontra "Pronto Atendimento"; a API responde `409 NOME_EM_USO` |
+| CT86 | RN13, D16 | B/I | Gravar direto no banco setor, turno e etapa (no mesmo setor) que só mudam em maiúsculas ou acentos ("RECEPCAO central" com "Recepção Central" já cadastrado); equipe repetida no mesmo setor e em outro; "Raio X" com "Raio-X" já cadastrado; buscar "PRONTO atendimento"; criar pela API setor que só muda em maiúsculas ou acentos | Repetições recusadas pelo banco; mesma equipe em outro setor aceita; "Raio X" aceito; a busca encontra "Pronto Atendimento"; a API responde `409 NOME_EM_USO` |
 
 ## 7. Critérios
 

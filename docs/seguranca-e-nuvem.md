@@ -127,7 +127,7 @@ A autorização é verificada em três níveis, todos no backend:
 | Recurso | Paciente (sem login) | Gestor | Super Admin |
 | --- | --- | --- | --- |
 | Responder a pesquisa e deixar manifestação | Sim | — | — |
-| TV Wall | Sim (só dados gerais, RN08) | — | — |
+| TV Wall | Sim (só porcentagens, RN08) | — | — |
 | Dashboard, exportação e relatório | — | Seus setores | Todos |
 | Perguntas | — | Seus setores | Todas |
 | Setores, turnos, equipes, usuários, escala, atendimentos, termos | — | — | Sim |
@@ -152,7 +152,7 @@ As rotas da pesquisa e do TV Wall não usam token (RNF08). Elas são protegidas 
 | Uma resposta por pergunta | Restrição única no banco (RF13) |
 | Validade da sessão | Respostas aceitas só até 12 horas depois da abertura |
 | Tamanho das requisições | Corpo JSON de no máximo 100 KB; textos de manifestação com até 2.000 caracteres |
-| Dados do TV Wall | A rota devolve apenas números agregados, elogios aprovados com o texto editado e melhorias publicadas (RN08) |
+| Dados do TV Wall | A rota devolve só porcentagens, nunca contagens; setores e etapas só quando marcados pelo Super Admin e com pelo menos 10 avaliações no mês, para uma porcentagem não identificar quem respondeu (RN08, RF31) |
 
 ---
 
@@ -296,5 +296,5 @@ Antes de cada publicação em produção:
 | RNF11 — Log de alterações | 8.1, 8.5 |
 | RNF12 — LGPD | 8 |
 | RN06, RN07 — Consentimento e anonimização | 8.1 a 8.3 |
-| RN08 — TV Wall só com dados gerais | 4, 5 |
+| RN08 — TV Wall só com porcentagens | 4, 5 |
 | Restrição de planos gratuitos (seção 2.3 dos requisitos) | 1.1 |

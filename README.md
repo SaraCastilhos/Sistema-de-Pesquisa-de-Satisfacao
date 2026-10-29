@@ -15,7 +15,7 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | **Pesquisa do paciente** | Pacientes e acompanhantes, sem login | Pesquisa por setor, aberta por QR Code, respondida só com toques e em menos de 1 minuto |
 | **Módulo da Ouvidoria** | Super Admin | Reúne elogios, reclamações e sugestões de todos os canais e acompanha cada retorno ao paciente |
 | **Dashboard** | Super Admin e Gestores | Indicadores do hospital até setor, turno e equipe, com exportação em Excel e relatório mensal em PDF |
-| **TV Wall** | Áreas de espera | Visão geral do hospital, elogios aprovados e melhorias feitas a partir das respostas |
+| **TV Wall** | Áreas de espera | Satisfação do hospital em porcentagem e, quando a Ouvidoria escolher, a de setores e etapas, com o QR Code da pesquisa |
 
 ## Tecnologias
 
