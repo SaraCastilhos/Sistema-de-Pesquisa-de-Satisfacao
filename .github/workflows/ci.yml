@@ -1,0 +1,93 @@
+# Verificação automática dos PRs (seção 11 de docs/arquitetura-backend.md):
+# instala as dependências, verifica o padrão do código, cria o banco de teste e roda os testes.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+    # "edited" inclui a troca da branch de destino do PR. Um PR empilhado (base em outra branch)
+    # passa a apontar para a develop quando a branch anterior é mergeada e apagada; sem "edited",
+    # essa troca não dispararia a verificação e o PR ficaria sem resultado.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [develop, main]
+
+# Um novo envio no mesmo PR cancela a verificação anterior, que ficou desatualizada
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Nome fixo: é ele que é escolhido como verificação obrigatória na proteção das branches
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fhdod
+          POSTGRES_PASSWORD: fhdod
+          POSTGRES_DB: fhdod_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fhdod -d fhdod_teste"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Valores FICTÍCIOS, os mesmos de backend/.env.test.example. Nenhum segredo é cadastrado no
+    # GitHub (seção 2 de docs/seguranca-e-nuvem.md). O TZ fica de fora de propósito: o runner
+    # roda em UTC, como o Render, e isso confirma que as datas não dependem do fuso da máquina.
+    env:
+      NODE_ENV: test
+      PORT: 3001
+      DATABASE_URL: postgresql://fhdod:fhdod@localhost:5432/fhdod_teste
+      DIRECT_URL: postgresql://fhdod:fhdod@localhost:5432/fhdod_teste
+      JWT_SEGREDO: xr+9/VxPFX0daCaMq6uAfRbAmp8WA180QnDvMf4lKFE=
+      JWT_EXPIRACAO: 8h
+      FRONTEND_URL: http://localhost:5173
+      TELEFONE_CHAVE_VERSAO: v1
+      TELEFONE_CHAVE_CIFRA: IFcG6sqDxBO+cXc9YS9VEp7YsSA6pEWkPpoIprlCg1M=
+      TELEFONE_CHAVE_HMAC: CS19TKgqlJFnZ+L2gjrO90TZjd/EIOpBCY6d0RBsFQM=
+      LOG_NIVEL: silent
+
+    steps:
+      - name: Baixa o código
+        uses: actions/checkout@v5
+
+      - name: Instala o Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Instala as dependências
+        run: npm ci
+
+      - name: Verifica o padrão do código (ESLint)
+        run: npm run lint
+
+      - name: Verifica a formatação (Prettier)
+        run: npx prettier --check .
+
+      - name: Gera o Prisma Client
+        run: npx prisma generate
+
+      - name: Cria o banco de teste
+        run: npx prisma migrate deploy
+
+      # O limite de 60% de cobertura dos services (RNF13) ainda NÃO bloqueia: ele está comentado
+      # no jest.config.js e será ligado na etapa de fechamento (BF), quando os services existirem.
+      - name: Roda os testes com cobertura
+        run: npm run test:coverage

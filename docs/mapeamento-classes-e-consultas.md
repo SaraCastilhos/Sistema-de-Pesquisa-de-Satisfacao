@@ -65,9 +65,10 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 
 | Repository | Principais funções | Tabelas | Operações |
 | --- | --- | --- | --- |
-| `usuarios` | `buscarPorEmail`, `buscarAtivoPorId`, `listar`, `criar`, `atualizar`, `definirSetores`, `listarSetoresDoGestor` | `usuario`, `gestor_setor` | Leitura e escrita; `definirSetores` substitui as atribuições numa transação |
+| `auth` | `buscarPorEmail`, `buscarAtivoPorId` | Leitura de `usuario` e `gestor_setor` | Só leitura. É o único repository que lê `senha_hash` (login); `buscarAtivoPorId` é usado pelo middleware `autenticar` a cada requisição |
+| `usuarios` | `listar`, `criar`, `atualizar`, `definirSetores`, `listarSetoresDoGestor` | `usuario`, `gestor_setor` | Leitura e escrita; `definirSetores` substitui as atribuições numa transação |
 | `auditoria` | `registrar` | `log_auditoria` | Só inserção |
-| `setores` | `listar`, `buscarPorSlug`, `criar`, `atualizar` | `setor` | Leitura e escrita, sem exclusão |
+| `setores` | `listar`, `buscarPorId`, `buscarPorSlug`, `criar`, `atualizar` | `setor` | Leitura e escrita, sem exclusão |
 | `turnos` | `listarAtivos`, `salvarGrade` | `turno` | `salvarGrade` cria, altera e desativa numa transação |
 | `equipes` | `listarDoSetor`, `listarAtivasDosSetores`, `existeNomeNoSetor`, `criar`, `atualizar` | `equipe` | Leitura e escrita, sem exclusão |
 | `escalas` | `listarDoMes`, `substituirMes` | `escala` | Importação em transação (consulta 4.9) |
@@ -75,7 +76,7 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 | `perguntas` | `listarAtivasDoSetor`, `listar`, `criar`, `atualizar`, `reordenar`, `contarRespostas` | `pergunta`, `opcao_pergunta`, `etapa` | Leitura e escrita, sem exclusão |
 | `pesquisa` | `abrirSessao`, `buscarSessao`, `gravarEtapas`, `gravarResposta`, `gravarNota` | `sessao`, `sessao_etapa`, `resposta` | Só inserção, mais a gravação única da nota |
 | `termos` | `buscarVigente`, `listar`, `criarVersao` | `termo_privacidade` | Só inserção (cada versão é nova) |
-| `manifestacoes` | `criar`, `listar`, `buscarDetalhe`, `listarAlertas`, `existeDuplicata`, `registrarTentativa`, `finalizar`, `aprovarParaTvWall`, `anexarFoto`, `buscarFoto` | `manifestacao`, `tentativa_contato`, `anexo_manifestacao` | Leitura e escrita, sem exclusão |
+| `manifestacoes` | `criar`, `listar`, `buscarDetalhe`, `listarAlertas`, `existeDuplicata`, `classificar`, `registrarTentativa`, `finalizar`, `aprovarParaTvWall`, `anexarFoto`, `buscarFoto` | `manifestacao`, `tentativa_contato`, `anexo_manifestacao` | Leitura e escrita, sem exclusão |
 | `melhorias` | `listar`, `criar`, `atualizar` | `melhoria` | Leitura e escrita |
 | `indicadores` | `resumo`, `distribuicaoNotas`, `porEtapa`, `porEquipe`, `adesao`, `ranking`, `dadosExportacao` | Leitura de `sessao`, `resposta`, `pergunta`, `escala`, `equipe`, `atendimento_mensal`, `manifestacao` | Só leitura |
 | `tvwall` | `resumoDoMes`, `evolucaoSeisMeses`, `elogiosAprovados`, `melhoriasPublicadas` | Leitura de `sessao`, `resposta`, `manifestacao`, `melhoria` | Só leitura |
@@ -312,6 +313,8 @@ prisma.manifestacao.findMany({
   take: tamanho,
 });
 ```
+
+O filtro "a classificar" (RF14, RN12) é enviado ao Prisma como `tipo: null`, que vira `tipo IS NULL`. Sem filtro de tipo, o service passa `tipo: undefined`, que o Prisma ignora. Confundir os dois muda o resultado: `null` traz só as não classificadas, e `undefined` traz todas.
 
 O `select` lista os campos explicitamente e **não inclui** `telefoneCifrado`, `telefoneHash` nem `profissionalCitado`. Esses campos só são lidos na consulta de detalhe de um chamado (RNF10).
 

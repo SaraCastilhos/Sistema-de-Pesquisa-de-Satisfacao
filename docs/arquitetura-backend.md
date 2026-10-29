@@ -1,7 +1,7 @@
 # Arquitetura do Backend — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.9 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.10 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
 
 Este documento descreve como o backend é organizado: as tecnologias, as camadas, os padrões de projeto, o contrato da API e as decisões que garantem manutenibilidade, segurança e escalabilidade. Os detalhes de segurança e hospedagem estão em [`seguranca-e-nuvem.md`](seguranca-e-nuvem.md), e as consultas ao banco em [`mapeamento-classes-e-consultas.md`](mapeamento-classes-e-consultas.md).
 
@@ -115,9 +115,12 @@ backend/
 │   │   ├── env.js             # lê e valida as variáveis de ambiente
 │   │   └── prisma.js          # instância única do Prisma Client
 │   ├── middlewares/           # autenticar, exigirPerfil, validar, limitarRequisicoes, tratarErros
-│   ├── utils/                 # funções puras: turnos, horasUteis, telefone, cripto, datas
+│   ├── repositories/          # repositories usados por vários módulos (ex.: auditoria)
+│   ├── utils/                 # turnos, horasUteis, telefone, cripto, sanitizar, datas, AppError,
+│   │                          # versaoDados, cache e paginacao
 │   ├── docs/
-│   │   └── openapi.yaml       # contrato da API (Swagger)
+│   │   ├── openapi.base.yaml  # parte comum do contrato: informações, segurança e formato de erro
+│   │   └── swagger.js         # junta o base com o contrato de cada módulo e publica o Swagger
 │   └── modules/
 │       ├── auth/
 │       ├── pesquisa/          # rotas públicas: sessões, respostas, nota, manifestação do paciente
@@ -136,8 +139,12 @@ backend/
 └── tests/
     ├── unit/                  # services e utils
     ├── integration/           # rotas com Supertest e banco de teste
-    └── helpers/               # criação de dados de teste
+    ├── helpers/               # limpeza do banco e criação de dados de teste
+    ├── globalSetup.js         # aplica as migrações no banco de teste antes da suíte
+    └── setup.js               # zera os limites de requisição antes de cada teste
 ```
+
+A pasta `src/repositories/` guarda os repositories que **vários módulos** usam, como o de auditoria (RNF11): manifestações, perguntas e usuários registram log, e nenhum desses módulos é "dono" da tabela `log_auditoria`. Os repositories de um módulo só ficam dentro do próprio módulo.
 
 Cada módulo segue o mesmo formato:
 
@@ -147,7 +154,8 @@ modules/manifestacoes/
 ├── manifestacoes.controller.js
 ├── manifestacoes.service.js
 ├── manifestacoes.repository.js
-└── manifestacoes.schemas.js   # esquemas Zod das entradas
+├── manifestacoes.schemas.js   # esquemas Zod das entradas
+└── manifestacoes.openapi.yaml # contrato das rotas do módulo (seção 7)
 ```
 
 O `app.js` monta a aplicação sem chamar `listen`. Assim, os testes de integração usam a aplicação diretamente com o Supertest, sem abrir uma porta de rede.
@@ -229,7 +237,9 @@ Se a mesma pergunta for enviada duas vezes (por exemplo, por um toque duplo), a 
 
 ## 7. Contrato da API
 
-A API segue o estilo REST, troca dados em JSON e fica sob o prefixo `/api`. O contrato completo fica em `src/docs/openapi.yaml`, publicado com Swagger em `/api/docs` (RNF13).
+A API segue o estilo REST, troca dados em JSON e fica sob o prefixo `/api`. O contrato é dividido por módulo: cada módulo descreve as próprias rotas em `<módulo>.openapi.yaml`, e `src/docs/swagger.js` junta esses arquivos com a parte comum (`src/docs/openapi.base.yaml`: informações da API, autenticação por token e o formato de erro da seção 7.4). O resultado é publicado com Swagger em `/api/docs` (RNF13), e o contrato completo em JSON fica em `/api/docs/openapi.json`.
+
+Com um arquivo por módulo, as duas integrantes nunca editam o mesmo arquivo de contrato, o que evita conflitos no Git. Se a mesma rota ou o mesmo schema aparecer em dois arquivos, a API não inicia e indica onde está a repetição, em vez de um contrato sobrescrever o outro sem ninguém perceber.
 
 O contrato é escrito **antes** do código de cada rota (*contract-first*) e revisado no mesmo PR. Assim, o frontend pode ser construído em paralelo, com dados simulados que seguem o contrato.
 
@@ -245,7 +255,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `PUT` | `/api/publico/sessoes/:id/etapas` | Grava as etapas que o paciente viveu | RF06 |
 | `POST` | `/api/publico/sessoes/:id/respostas` | Grava uma resposta ou um pulo | RF03, RF07 |
 | `PUT` | `/api/publico/sessoes/:id/nota` | Grava a nota geral | RF03, RF08 |
-| `POST` | `/api/publico/sessoes/:id/manifestacoes` | Registra elogio, reclamação ou sugestão, com telefone opcional | RF09, RF10 |
+| `POST` | `/api/publico/sessoes/:id/manifestacoes` | Registra a mensagem do paciente para a Ouvidoria, sem tipo (a classificar) e com telefone opcional | RF09, RF10, RN12 |
 | `GET` | `/api/publico/termos` | Texto vigente dos termos de privacidade | RF24 |
 | `GET` | `/api/publico/tv-wall` | Painéis agregados do TV Wall | RF30, RN08 |
 | `GET` | `/api/saude` | Verificação de funcionamento (usada pelo Render) | — |
@@ -284,6 +294,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `GET` `POST` | `/api/manifestacoes` | SA | Lista com filtros e registro de outros canais | RF14, RF17 |
 | `GET` | `/api/manifestacoes/alertas` | SA | Pedidos de retorno sem contato em 48 horas úteis | RF16 |
 | `GET` | `/api/manifestacoes/:id` | SA | Detalhe do chamado, com o telefone decifrado | RF14, RNF10 |
+| `PUT` | `/api/manifestacoes/:id/tipo` | SA | Classificar a manifestação ou corrigir o tipo | RF15, RN12 |
 | `POST` | `/api/manifestacoes/:id/tentativas` | SA | Registrar tentativa de contato | RF15 |
 | `POST` | `/api/manifestacoes/:id/finalizacao` | SA | Encerrar ou marcar sem retorno | RF15, RN07 |
 | `PUT` `DELETE` | `/api/manifestacoes/:id/tv-wall` | SA | Aprovar um elogio para o TV Wall ou retirar a aprovação | RF18 |
@@ -367,7 +378,8 @@ O mesmo *polling* do TV Wall mantém a API ativa enquanto a TV está ligada, evi
 | **Relatório mensal em PDF** | Gerado sob demanda com PDFKit, com os indicadores do mês e a comparação com o mês anterior | RF29 |
 | **Alerta de 48 horas úteis** | Calculado no momento da consulta, por uma função pura em `utils/horasUteis.js` que conta só as horas de segunda a sexta. Não há tarefa agendada | RF16 |
 | **Possível duplicata** | Ao registrar uma manifestação com telefone, o service procura outra com o mesmo `telefone_hash` e setor nas últimas 24 horas | RF19 |
-| **Finalização do chamado** | Uma transação muda o status, grava o desfecho, apaga telefone e hash e registra o log. Se qualquer passo falhar, nada é alterado | RN07, RNF11 |
+| **Classificação da manifestação** | O Super Admin define o tipo (elogio, reclamação ou sugestão) e pode corrigi-lo; o tipo anterior e o novo vão para o log. O tipo nunca volta a ficar vazio, e um elogio aprovado para o TV Wall só muda de tipo depois de retirada a aprovação (`409`) | RN12, RF18, RNF11 |
+| **Finalização do chamado** | Exige o tipo definido (`422` se ainda estiver a classificar). Uma transação muda o status, grava o desfecho, apaga telefone e hash e registra o log. Se qualquer passo falhar, nada é alterado | RN07, RNF11 |
 | **Fotos de formulários** | Recebidas com multer (até 300 KB, só imagens), já reduzidas pelo frontend, e gravadas no banco | RF17 |
 
 O projeto não usa tarefas agendadas (*cron*): tudo o que depende do tempo, como o alerta de 48 horas e a expiração de sessões em 12 horas, é calculado no momento da consulta. Isso evita depender de um serviço extra e funciona mesmo com a API suspensa.
@@ -402,7 +414,7 @@ flowchart LR
     E -- não --> G["PR bloqueado"]
 ```
 
-- **Documentação viva:** o `openapi.yaml` é atualizado no mesmo PR que muda uma rota, e o revisor confere os dois juntos.
+- **Documentação viva:** o `<módulo>.openapi.yaml` é atualizado no mesmo PR que muda uma rota do módulo, e o revisor confere os dois juntos.
 - **Logs:** cada requisição registra método, rota, status e tempo de resposta. O corpo das requisições e o cabeçalho de autorização **nunca** são registrados, porque podem conter telefone, textos dos pacientes ou o token.
 
 ---

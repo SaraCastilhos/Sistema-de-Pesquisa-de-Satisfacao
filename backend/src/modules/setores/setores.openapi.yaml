@@ -1,0 +1,179 @@
+# Contrato das rotas do módulo setores, juntado aos demais por src/docs/swagger.js
+tags:
+  - name: Setores
+    description: Cadastro de setores (RF20)
+paths:
+  /api/setores:
+    get:
+      tags: [Setores]
+      summary: Lista os setores
+      description: >
+        Super Admin vê todos os setores; Gestor vê só os atribuídos a ele (RNF10).
+        Ordenados pelo nome.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ativo
+          in: query
+          required: false
+          description: Filtra por setores ativos (true) ou desativados (false). Sem o filtro, vêm todos.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Lista de setores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Setor'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+    post:
+      tags: [Setores]
+      summary: Cadastra um setor (só Super Admin)
+      description: >
+        Sem slug, ele é gerado a partir do nome: minúsculas, sem acentos e com hífens no lugar dos
+        espaços ("Pronto Atendimento" vira "pronto-atendimento"). O slug forma o endereço da
+        pesquisa (/pesquisa/{slug}) e o QR Code do setor. A criação é registrada no log.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetorEntrada'
+            examples:
+              slugGerado:
+                summary: Só o nome (slug gerado)
+                value: { nome: Pronto Atendimento }
+              slugInformado:
+                summary: Nome e slug
+                value: { nome: Raio-X, slug: raio-x }
+      responses:
+        '201':
+          description: Setor criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setor'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '409':
+          description: Já existe um setor com esse nome (NOME_EM_USO) ou slug (SLUG_EM_USO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              example:
+                erro:
+                  codigo: SLUG_EM_USO
+                  mensagem: Já existe um setor com esse slug.
+                  detalhes: [{ campo: body.slug, mensagem: Já está em uso. }]
+        '422':
+          description: O nome não tem letras nem números para gerar o slug (SLUG_NAO_GERADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/setores/{id}:
+    patch:
+      tags: [Setores]
+      summary: Edita, desativa ou reativa um setor (só Super Admin)
+      description: >
+        Envie só os campos que mudam. Setores nunca são apagados: para tirar um setor de uso,
+        envie ativo = false (D6). Renomear não muda o slug; mudar o slug invalida os QR Codes já
+        impressos. A alteração é registrada no log, com os dados de antes e de depois.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetorAlteracao'
+            examples:
+              desativar:
+                summary: Desativar
+                value: { ativo: false }
+              renomear:
+                summary: Renomear
+                value: { nome: Pronto-Socorro }
+      responses:
+        '200':
+          description: Setor alterado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setor'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Já existe um setor com esse nome (NOME_EM_USO) ou slug (SLUG_EM_USO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    Setor:
+      type: object
+      required: [id, nome, slug, ativo, criadoEm, atualizadoEm]
+      properties:
+        id: { type: integer, examples: [1] }
+        nome: { type: string, examples: [Pronto Atendimento] }
+        slug: { type: string, examples: [pronto-atendimento] }
+        ativo: { type: boolean, examples: [true] }
+        criadoEm: { type: string, format: date-time }
+        atualizadoEm: { type: string, format: date-time }
+    SetorEntrada:
+      type: object
+      additionalProperties: false
+      required: [nome]
+      properties:
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: Espaços nas pontas são removidos
+        slug:
+          type: string
+          maxLength: 80
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$'
+          description: Opcional. Sem ele, é gerado a partir do nome
+    SetorAlteracao:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 80 }
+        slug: { type: string, maxLength: 80, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        ativo: { type: boolean }

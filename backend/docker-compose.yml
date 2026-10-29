@@ -1,0 +1,26 @@
+# PostgreSQL local para desenvolvimento e testes (seção 10 de docs/arquitetura-backend.md).
+# Em produção o banco é o Neon; este arquivo não é usado na publicação.
+name: fhdod
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: fhdod
+      POSTGRES_PASSWORD: fhdod
+      POSTGRES_DB: fhdod
+    ports:
+      # 5433 no computador, para não conflitar com um PostgreSQL já instalado na 5432
+      - '5433:5432'
+    volumes:
+      - dados:/var/lib/postgresql/data
+      # Roda só na primeira vez que o volume é criado: cria o banco de teste
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fhdod -d fhdod']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dados:

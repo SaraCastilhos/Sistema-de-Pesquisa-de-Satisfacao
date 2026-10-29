@@ -3,7 +3,7 @@
 **Cliente:** Fundação Hospitalar Dr. Oswaldo Diesel (FHDOD), Três Coroas/RS — Ouvidoria
 **Responsáveis:** Maria Luiza Altenhofen Loth e Sara Amabili Castilhos
 **Projeto:** Projeto Integrador 2026/2 — Curso Técnico em Informática
-**Versão:** 1.9 — 20/10/2026
+**Versão:** 1.10 — 23/10/2026
 
 ---
 
@@ -118,18 +118,18 @@ Os requisitos funcionais descrevem as ações e serviços que o sistema deve exe
 | **RF06** | O sistema deve perguntar por quais etapas o paciente passou e exibir só as perguntas dessas etapas. | Etapas: Recepção, Triagem, Enfermagem, Médico. | Essencial |
 | **RF07** | O sistema deve gravar cada resposta assim que o paciente avança de pergunta. | As respostas são acumulativas: cada uma entra nos indicadores no momento em que é gravada, mesmo que o paciente não conclua a pesquisa. | Essencial |
 | **RF08** | O sistema deve adaptar o final da pesquisa conforme a nota geral. | Nota de 0 a 6 abre o espaço da Ouvidoria. Nota de 7 a 10 pergunta "Alguém da equipe fez diferença no seu atendimento?" e convida a deixar um elogio. | Essencial |
-| **RF09** | O sistema deve oferecer espaço para elogio, reclamação ou sugestão. | O tipo é escolhido por botão; o paciente pode indicar a etapa e citar o profissional envolvido. | Essencial |
-| **RF10** | Qualquer paciente deve poder ficar anônimo ou deixar telefone para retorno. | Ao informar telefone, aparece o consentimento LGPD com link para os termos e os botões "Enviar" e "Cancelar". Tocar em "Cancelar" pergunta "Tem certeza que deseja cancelar o envio do telefone?"; confirmando, o telefone é descartado e a pesquisa segue para o agradecimento. | Essencial |
+| **RF09** | O sistema deve oferecer espaço para elogio, reclamação ou sugestão. | O paciente escreve a mensagem sem precisar classificá-la e pode indicar a etapa e citar o profissional envolvido. O tipo (elogio, reclamação ou sugestão) é definido pela Ouvidoria (RN12). | Essencial |
+| **RF10** | Qualquer paciente deve poder ficar anônimo ou deixar telefone para retorno. | Ao informar telefone, aparecem a caixa de autorização (consentimento LGPD, com link para os termos) e os botões "Enviar" e "Cancelar". Com o telefone preenchido, "Enviar" só funciona com a caixa marcada; sem ela, a tela avisa que falta a autorização, nada é enviado e a tela não muda. Para enviar sem telefone, o paciente apaga o número, e a manifestação vai anônima. Tocar em "Cancelar" sempre pede confirmação ("Tem certeza que deseja cancelar? Sua mensagem não será enviada."); confirmando, a manifestação inteira (texto e telefone) é descartada, nada é enviado e a pesquisa segue para o agradecimento. | Essencial |
 | **RF11** | Ao final, o sistema deve mostrar uma tela de agradecimento. | No tablet, a tela de agradecimento volta sozinha para o início 8 segundos depois de concluída a pesquisa, liberando o aparelho para o próximo paciente. Também há um botão "Nova pesquisa" para quem quiser pular a espera. | Importante |
-| **RF12** | O sistema deve permitir responder depois, em casa. | O QR Code aparece no tablet, em cartazes, no documento de alta e no TV Wall. | Importante |
+| **RF12** | O sistema deve permitir responder depois, em casa. | O QR Code do setor aparece em cartazes, no documento de alta e no TV Wall. | Importante |
 | **RF13** | O sistema deve evitar respostas duplicadas e tratar sessões abandonadas no tablet. | Cada pesquisa aberta gera uma sessão, e cada pergunta é gravada uma única vez por sessão. No celular, quem já respondeu ao setor nas últimas 12 horas vê "Você já respondeu hoje" e pode complementar. No tablet, se ficar 2 minutos sem toque com uma pesquisa em aberto, aparece a tela "Continuar pesquisa" ou "Nova pesquisa": a primeira retoma de onde o paciente parou, a segunda descarta a sessão aberta e começa em branco para o próximo paciente. | Importante |
 
 ### 3.2 Ouvidoria (Super Admin)
 
 | ID | Requisito Funcional | Detalhamento / Critério de aceitação | Prioridade |
 | --- | --- | --- | --- |
-| **RF14** | O Super Admin deve ver a lista de manifestações com filtros. | Mostra tipo, setor, data, turno, nota, texto e telefone. Filtros por status, tipo, setor, período e turno. | Essencial |
-| **RF15** | O Super Admin deve tratar cada manifestação como um chamado. | Registra cada tentativa de contato (data, responsável, resultado). Status: Nova (vermelho), Em contato (amarelo), Encerrada (verde) e Sem retorno (cinza, após 3 tentativas sem sucesso). "Encerrada" e "Sem retorno" finalizam o chamado e exigem o desfecho descrito. | Essencial |
+| **RF14** | O Super Admin deve ver a lista de manifestações com filtros. | Mostra tipo (ou "a classificar"), setor, data, turno, nota e texto; o telefone aparece só no detalhe do chamado. Filtros por status, tipo (inclusive "a classificar"), setor, período e turno. | Essencial |
+| **RF15** | O Super Admin deve tratar cada manifestação como um chamado. | Registra cada tentativa de contato (data, responsável, resultado). Status: Nova (vermelho), Em contato (amarelo), Encerrada (verde) e Sem retorno (cinza, após 3 tentativas sem sucesso). "Encerrada" e "Sem retorno" finalizam o chamado e exigem o desfecho descrito. O Super Admin define o tipo de cada manifestação vinda da pesquisa e pode corrigi-lo, com registro no log (RNF11); só um chamado com tipo definido pode ser finalizado (RN12). | Essencial |
 | **RF16** | O sistema deve alertar sobre pedidos de retorno sem primeiro contato em 48 horas úteis. | O alerta aparece no topo do módulo da Ouvidoria. Contam-se as horas de segunda a sexta-feira; feriados não são descontados nesta versão. | Importante |
 | **RF17** | O Super Admin deve registrar manifestações recebidas por outros canais. | Telefone, presencial, e-mail ou papel seguem o mesmo fluxo da pesquisa. Para papel, o Super Admin pode anexar uma foto do formulário ao registro; a digitação dos dados continua manual (ver RN11 sobre o motivo de não haver leitura automática). | Importante |
 | **RF18** | O Super Admin deve aprovar elogios para o TV Wall e cadastrar melhorias feitas a partir das pesquisas. | Elogios aparecem sem nome do paciente. Melhorias alimentam o painel "Sua resposta virou melhoria". | Desejável |
@@ -151,10 +151,10 @@ Os requisitos funcionais descrevem as ações e serviços que o sistema deve exe
 
 | ID | Requisito Funcional | Detalhamento / Critério de aceitação | Prioridade |
 | --- | --- | --- | --- |
-| **RF27** | O sistema deve exibir um dashboard com os indicadores atualizados automaticamente. | Total de respostas, taxa de adesão (respostas completas ÷ atendimentos informados no RF25), nota média, NPS, distribuição das notas e manifestações por tipo. A atualização segue o RNF07. A taxa de adesão só é calculada para setores e períodos com atendimentos informados; nos demais, o painel indica "atendimentos não informados". | Essencial |
+| **RF27** | O sistema deve exibir um dashboard com os indicadores atualizados automaticamente. | Total de respostas, taxa de adesão (respostas completas ÷ atendimentos informados no RF25), nota média, NPS, distribuição das notas e manifestações por tipo, com as ainda não classificadas em uma categoria própria ("a classificar"). A atualização segue o RNF07. A taxa de adesão só é calculada para setores e períodos com atendimentos informados; nos demais, o painel indica "atendimentos não informados". | Essencial |
 | **RF28** | O dashboard deve permitir navegar do hospital até setor, turno e equipe. | Filtros por período, setor, turno, etapa e canal; ranking de setores e etapas. O Gestor vê só seus setores. Nomes citados em manifestações não aparecem. | Essencial |
 | **RF29** | O sistema deve exportar os dados em Excel e gerar relatório mensal. | A exportação respeita os filtros aplicados. O relatório mensal é gerado em PDF. | Essencial |
-| **RF30** | O sistema deve ter um TV Wall com a visão geral do hospital. | Tela cheia, tema claro seguindo a identidade visual da FHDOD (RNF06), atualização automática (RNF07) e painéis alternando a cada 15 segundos: nota geral e total de respostas do mês, evolução da nota nos últimos 6 meses, elogios aprovados, "Sua resposta virou melhoria" e QR Code. Os painéis de elogios e de melhorias só entram no rodízio quando houver conteúdo aprovado ou cadastrado (RF18). | Essencial |
+| **RF30** | O sistema deve ter um TV Wall com a visão geral do hospital. | Tela cheia, tema claro seguindo a identidade visual da FHDOD (RNF06), atualização automática (RNF07) e painéis alternando a cada 15 segundos: nota geral e total de respostas do mês, evolução da nota nos últimos 6 meses, elogios aprovados, "Sua resposta virou melhoria" e QR Code. Os painéis de elogios e de melhorias só entram no rodízio quando houver conteúdo aprovado ou cadastrado (RF18). O QR Code leva à pesquisa do setor atendido pela área de espera onde a TV está; cada TV abre o TV Wall com o setor no endereço (ex.: `/tv-wall/pronto-atendimento`), e sem setor no endereço o painel do QR Code não entra no rodízio. Os dados exibidos continuam sendo os do hospital inteiro (RN08). | Essencial |
 
 ---
 
@@ -191,12 +191,13 @@ Regras de negócio são condições que restringem ou orientam a execução das 
 | RN03 | Data e turno do atendimento | A pergunta de data e período do atendimento vem ativa por padrão, e o turno é o que o paciente informar. Se o Super Admin desativá-la, o turno passa a ser calculado pela hora da resposta. |
 | RN04 | Avaliação da equipe, não do profissional | As notas são ligadas à equipe do turno pela escala. Profissionais citados ficam só na manifestação, tratada pela Ouvidoria, e não aparecem em indicadores. |
 | RN05 | Encaminhamento à Ouvidoria | Nota geral de 0 a 6 abre o espaço da Ouvidoria; manifestação com telefone entra na fila com status "Nova". |
-| RN06 | Telefone só com consentimento | Sem o aceite dos termos, a manifestação é registrada como anônima. |
+| RN06 | Telefone só com consentimento | O telefone só é gravado com o aceite dos termos e nunca é gravado sem ele. Uma manifestação com telefone e sem aceite não é enviada: a tela pede a autorização (RF10) e a API a recusa. Para ficar anônimo, o paciente envia sem telefone. |
 | RN07 | Finalização do chamado | Um chamado só é finalizado ("Encerrada" ou "Sem retorno") com o desfecho descrito, e a manifestação nunca é apagada. Ao finalizar, o telefone e o seu hash são apagados e ela passa a ser anônima. |
-| RN08 | TV Wall só com dados gerais | O TV Wall nunca mostra setor, turno, equipe, reclamações, nomes, telefones ou texto não aprovado pelo Super Admin. |
+| RN08 | TV Wall só com dados gerais | O TV Wall nunca mostra setor, turno, equipe, reclamações, nomes, telefones ou texto não aprovado pelo Super Admin. O QR Code da área de espera aponta para a pesquisa de um setor (RF30), mas não exibe dados desse setor. |
 | RN09 | Perguntas nunca são removidas | Perguntas só são desativadas, para manter a rastreabilidade das respostas. |
 | RN10 | Gestor por área | Um Gestor pode ser responsável por mais de um setor, e um setor pode ter mais de um Gestor. |
 | RN11 | Papel digitado manualmente | Formulários em papel são fotografados para anexo (RF17), mas os dados são digitados por uma pessoa. Como as marcações do papel são por bolinhas (não texto escrito à mão), leitura automática por reconhecimento óptico de marcação (OMR) é tecnicamente viável, mas exige gabarito impresso fixo e processamento de imagem à parte. Como o papel virou canal secundário — a maior parte das respostas já chega digital pelo RF02 — essa automação fica como perspectiva futura, fora do escopo desta versão. |
+| RN12 | Tipo definido pela Ouvidoria | O paciente não classifica a própria manifestação, porque poderia escolher o tipo pelo sentimento e não pelo conteúdo, distorcendo os indicadores. A manifestação da pesquisa chega "a classificar", e o Super Admin define o tipo ao tratá-la. Nos outros canais (RF17), o tipo é definido já no registro. |
 
 ---
 
@@ -212,7 +213,7 @@ Regras de negócio são condições que restringem ou orientam a execução das 
 | Não perder respostas de quem desiste no meio | RF07, RN01 |
 | Resgatar os elogios | RF08, RF09, RF18, RF30 |
 | Saber se o paciente quer retorno e acompanhar o contato | RF10, RF14–RF16, RN06, RN07 |
-| Unificar a Ouvidoria | RF14, RF17 |
+| Unificar a Ouvidoria | RF14, RF17, RN12 |
 | Acabar com a transcrição do papel e ter métricas em número | RF25, RF27–RF29 |
 | Cada área cadastrar as próprias perguntas | RF20, RF22, RN10 |
 | Rastreabilidade das perguntas e respostas | RF23, RN01, RN09, RNF11 |
