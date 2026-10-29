@@ -19,7 +19,6 @@ rotas.use('/api/atendimentos', require('../modules/atendimentos/atendimentos.rou
 rotas.use('/api/perguntas', require('../modules/perguntas/perguntas.routes'));
 rotas.use('/api/termos', require('../modules/termos/termos.routes'));
 rotas.use('/api/manifestacoes', require('../modules/manifestacoes/manifestacoes.routes'));
-rotas.use('/api/melhorias', require('../modules/melhorias/melhorias.routes'));
 // Dashboard, exportação em Excel e relatório em PDF usam os mesmos filtros e ficam juntos
 rotas.use('/api/indicadores', require('../modules/indicadores/indicadores.routes'));
 
