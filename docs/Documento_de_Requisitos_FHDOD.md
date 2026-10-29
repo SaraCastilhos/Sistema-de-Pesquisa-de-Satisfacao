@@ -3,7 +3,7 @@
 **Cliente:** Fundação Hospitalar Dr. Oswaldo Diesel (FHDOD), Três Coroas/RS — Ouvidoria
 **Responsáveis:** Maria Luiza Altenhofen Loth e Sara Amabili Castilhos
 **Projeto:** Projeto Integrador 2026/2 — Curso Técnico em Informática
-**Versão:** 1.10 — 23/10/2026
+**Versão:** 1.11 — 28/10/2026
 
 ---
 
@@ -22,7 +22,7 @@ O sistema é uma aplicação web responsiva com quatro partes: pesquisa do pacie
 | Termo | Significado |
 | --- | --- |
 | Setor | Unidade de atendimento com pesquisa própria (ex.: Pronto Atendimento, Internação, Raio-X) |
-| Etapa da jornada | Ponto de contato do paciente: Recepção, Triagem, Enfermagem ou Médico |
+| Etapa da jornada | Ponto de contato do paciente, cadastrado pelo Super Admin (inicialmente Recepção, Triagem, Enfermagem e Médico) |
 | Turno | Período de trabalho com horário de início e fim (ex.: manhã, tarde, noite) |
 | Escala | Relação mensal entre setor, data, turno e equipe |
 | Equipe | Grupo de profissionais escalados em um setor e turno |
@@ -58,7 +58,7 @@ O problema que o sistema resolve é a baixa adesão e a baixa qualidade das resp
 O sistema oferece:
 
 - Pesquisa por setor, com URL e QR Code próprios, respondida só com toques, pensada para o celular do paciente e também usada em tablets de 10 polegadas nos setores.
-- Perguntas organizadas pela jornada do paciente (Recepção, Triagem, Enfermagem, Médico), exibidas apenas para as etapas que ele viveu.
+- Perguntas organizadas pela jornada do paciente (inicialmente Recepção, Triagem, Enfermagem e Médico, editáveis pela Ouvidoria), exibidas apenas para as etapas que ele viveu.
 - Espaço para elogio, reclamação ou sugestão, anônimo ou com telefone para retorno.
 - Módulo único da Ouvidoria, que reúne as manifestações da pesquisa e de outros canais e acompanha cada retorno até o encerramento.
 - Dashboard de gestão atualizado automaticamente, do hospital até setor, turno e equipe, com exportação em Excel.
@@ -69,7 +69,7 @@ O sistema oferece:
 | Perfil | Quem usa | O que acessa |
 | --- | --- | --- |
 | Paciente / acompanhante | Qualquer pessoa atendida, sem login | Pesquisa e manifestação |
-| Super Admin | Ouvidoria | Tudo: configurações, setores, turnos, escala, usuários, todas as perguntas, dashboard completo, módulo da Ouvidoria e telefones |
+| Super Admin | Ouvidoria | Tudo: configurações, setores, turnos, etapas, escala, usuários, todas as perguntas, dashboard completo, módulo da Ouvidoria e telefones |
 | Gestor | Responsável por uma ou mais áreas | Perguntas e dashboard dos setores atribuídos a ele |
 
 O hospital definiu no briefing dois níveis de administração. As funções de Ouvidoria, Gestão e Visualizador citadas no enunciado de Design estão contidas nesses dois perfis: a Ouvidoria é o Super Admin, e a gestão e a consulta de cada área ficam com o Gestor.
@@ -115,7 +115,7 @@ Os requisitos funcionais descrevem as ações e serviços que o sistema deve exe
 | **RF03** | A pesquisa deve ter uma única pergunta obrigatória: a nota geral do hospital, de 0 a 10, exibida ao final. | As demais perguntas são opcionais, com botão discreto de pular em cada uma — é esse botão, repetido pergunta a pergunta, que leva o paciente rápido até a nota, sem um atalho único que pule tudo de uma vez sem mostrar nada. | Essencial |
 | **RF04** | A pesquisa deve ser respondida só com toques, uma pergunta por tela. | A primeira pergunta de cada etapa é do tipo rostinho (1 a 5), para abrir a pesquisa de forma leve; as demais podem usar qualquer tipo cadastrado (RF22). Botões grandes em toda a pesquisa. A primeira tela avisa que a pesquisa leva menos de 1 minuto. Texto livre só no campo de manifestação. | Essencial |
 | **RF05** | A pesquisa não deve indicar quantas perguntas faltam. | Sem contador, número de perguntas ou barra de progresso. A única referência é o nome da etapa atual (ex.: "Recepção"). | Importante |
-| **RF06** | O sistema deve perguntar por quais etapas o paciente passou e exibir só as perguntas dessas etapas. | Etapas: Recepção, Triagem, Enfermagem, Médico. | Essencial |
+| **RF06** | O sistema deve perguntar por quais etapas o paciente passou e exibir só as perguntas dessas etapas. | As etapas são cadastradas pelo Super Admin (RF20); as iniciais são Recepção, Triagem, Enfermagem e Médico. A pesquisa só oferece as etapas ativas que tenham pelo menos uma pergunta ativa no setor. | Essencial |
 | **RF07** | O sistema deve gravar cada resposta assim que o paciente avança de pergunta. | As respostas são acumulativas: cada uma entra nos indicadores no momento em que é gravada, mesmo que o paciente não conclua a pesquisa. | Essencial |
 | **RF08** | O sistema deve adaptar o final da pesquisa conforme a nota geral. | Nota de 0 a 6 abre o espaço da Ouvidoria. Nota de 7 a 10 pergunta "Alguém da equipe fez diferença no seu atendimento?" e convida a deixar um elogio. | Essencial |
 | **RF09** | O sistema deve oferecer espaço para elogio, reclamação ou sugestão. | O paciente escreve a mensagem sem precisar classificá-la e pode indicar a etapa e citar o profissional envolvido. O tipo (elogio, reclamação ou sugestão) é definido pela Ouvidoria (RN12). | Essencial |
@@ -139,9 +139,9 @@ Os requisitos funcionais descrevem as ações e serviços que o sistema deve exe
 
 | ID | Requisito Funcional | Detalhamento / Critério de aceitação | Prioridade |
 | --- | --- | --- | --- |
-| **RF20** | O Super Admin deve gerenciar setores, turnos, equipes e gestores. | Cria, edita e desativa. Cada equipe pertence a um setor. Cada gestor recebe um ou mais setores. | Essencial |
-| **RF21** | O Super Admin deve importar a escala mensal por planilha Excel. | Cada linha: setor + data + turno + equipe. A importação só aceita equipes cadastradas e ativas no setor da linha; se alguma linha tiver erro, nada é gravado e o sistema indica as linhas a corrigir. | Essencial |
-| **RF22** | O Super Admin deve gerenciar todas as perguntas; o Gestor, as perguntas dos seus setores. | Cadastrar, editar, ordenar e ativar/desativar. Tipos: rostinhos (1 a 5), escala (0 a 10), sim/não, múltipla escolha e data e período do atendimento. | Essencial |
+| **RF20** | O Super Admin deve gerenciar setores, turnos, etapas da jornada, equipes e gestores. | Cria, edita e desativa; nada é apagado. Nomes não se repetem, sem diferenciar maiúsculas nem acentos (RN13). As etapas também podem ser reordenadas. Cada equipe pertence a um setor. Cada gestor recebe um ou mais setores. | Essencial |
+| **RF21** | O Super Admin deve importar a escala mensal por planilha Excel. | Cada linha: setor + data + turno + equipe. A importação só aceita equipes cadastradas e ativas no setor da linha, reconhecendo setor, turno e equipe sem diferenciar maiúsculas nem acentos (RN13); se alguma linha tiver erro, nada é gravado e o sistema indica as linhas a corrigir. | Essencial |
+| **RF22** | O Super Admin deve gerenciar todas as perguntas; o Gestor, as perguntas dos seus setores. | Cadastrar, editar, ordenar e ativar/desativar. Pergunta não pode ser criada nem reativada em etapa desativada. Tipos: rostinhos (1 a 5), escala (0 a 10), sim/não, múltipla escolha e data e período do atendimento. | Essencial |
 | **RF23** | As perguntas não podem ser removidas, apenas desativadas. | Pergunta desativada sai da pesquisa, mas suas respostas continuam nos relatórios. | Essencial |
 | **RF24** | O Super Admin deve definir o texto dos termos de privacidade. | Os termos ficam em link na pesquisa. | Importante |
 | **RF25** | O Super Admin deve informar o número mensal de atendimentos por setor. | Usado para calcular a taxa de adesão (RF27): respostas completas ÷ atendimentos informados, por setor e por período. | Desejável |
@@ -198,6 +198,7 @@ Regras de negócio são condições que restringem ou orientam a execução das 
 | RN10 | Gestor por área | Um Gestor pode ser responsável por mais de um setor, e um setor pode ter mais de um Gestor. |
 | RN11 | Papel digitado manualmente | Formulários em papel são fotografados para anexo (RF17), mas os dados são digitados por uma pessoa. Como as marcações do papel são por bolinhas (não texto escrito à mão), leitura automática por reconhecimento óptico de marcação (OMR) é tecnicamente viável, mas exige gabarito impresso fixo e processamento de imagem à parte. Como o papel virou canal secundário — a maior parte das respostas já chega digital pelo RF02 — essa automação fica como perspectiva futura, fora do escopo desta versão. |
 | RN12 | Tipo definido pela Ouvidoria | O paciente não classifica a própria manifestação, porque poderia escolher o tipo pelo sentimento e não pelo conteúdo, distorcendo os indicadores. A manifestação da pesquisa chega "a classificar", e o Super Admin define o tipo ao tratá-la. Nos outros canais (RF17), o tipo é definido já no registro. |
+| RN13 | Nomes sem repetição disfarçada | Nomes de setores, turnos, etapas e equipes (estas, dentro do mesmo setor) não se repetem mesmo que mudem só em maiúsculas ou acentos: "Recepção" e "RECEPCAO" são o mesmo nome. O nome fica gravado como foi digitado, e a busca por nome, como a da importação da escala, encontra o cadastro de qualquer forma que ele seja escrito. Espaços e pontuação continuam diferenciando ("Raio-X" e "Raio X" são nomes diferentes). |
 
 ---
 
@@ -220,7 +221,7 @@ Regras de negócio são condições que restringem ou orientam a execução das 
 | Indicadores visíveis em tela | RF30, RN08 |
 | Acessibilidade e facilidade de uso | RF04, RF05, RNF04, RNF05 |
 | Proteger os dados do paciente (LGPD) | RF10, RNF10, RNF12, RN06, RN07 |
-| Evitar duplicatas | RF13, RF19 |
+| Evitar duplicatas | RF13, RF19, RN13 |
 
 ---
 

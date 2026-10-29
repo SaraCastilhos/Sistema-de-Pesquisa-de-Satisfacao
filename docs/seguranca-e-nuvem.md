@@ -27,7 +27,7 @@ Este documento descreve onde o sistema é hospedado, como os dados são protegid
 | Render | 750 horas de instância por mês | Uma API ligada o mês inteiro usa cerca de 730 horas |
 | Render | Disco apagado a cada publicação | Nada é gravado em disco; fotos ficam no banco |
 | Neon | 0,5 GB de armazenamento por projeto | Crescimento estimado de cerca de 150 MB por ano (seção 7.4 do modelo) |
-| Neon | Horas de processamento limitadas; o banco é suspenso após alguns minutos sem consultas | O cache por versão da API evita consultas repetidas (seção 8 da arquitetura) |
+| Neon | Horas de processamento limitadas; o banco é suspenso após alguns minutos sem consultas | O cache por versão da API evita recalcular os indicadores, e o TV Wall não consulta o banco sem dado novo. Cada dashboard aberto faz uma consulta leve a cada 5 segundos (a do usuário logado), por isso o frontend pausa a atualização com a aba oculta (seção 8 da arquitetura) |
 | Neon | Janela curta de restauração do histórico | Ver seção 9 |
 | Vercel | O plano Hobby é destinado a uso pessoal e não comercial | Adequado à entrega acadêmica. Para o hospital adotar o sistema em definitivo, deve-se confirmar se o uso se enquadra nos termos do plano ou migrar o frontend para um serviço gratuito que permita uso institucional |
 

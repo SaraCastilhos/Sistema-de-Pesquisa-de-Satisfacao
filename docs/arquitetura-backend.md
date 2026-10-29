@@ -1,7 +1,7 @@
 # Arquitetura do Backend — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.10 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.11 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
 
 Este documento descreve como o backend é organizado: as tecnologias, as camadas, os padrões de projeto, o contrato da API e as decisões que garantem manutenibilidade, segurança e escalabilidade. Os detalhes de segurança e hospedagem estão em [`seguranca-e-nuvem.md`](seguranca-e-nuvem.md), e as consultas ao banco em [`mapeamento-classes-e-consultas.md`](mapeamento-classes-e-consultas.md).
 
@@ -113,11 +113,12 @@ backend/
 │   ├── server.js              # inicia o servidor
 │   ├── config/
 │   │   ├── env.js             # lê e valida as variáveis de ambiente
-│   │   └── prisma.js          # instância única do Prisma Client
+│   │   ├── prisma.js          # instância única do Prisma Client
+│   │   └── regras.js          # números das regras de negócio (prazos e limites)
 │   ├── middlewares/           # autenticar, exigirPerfil, validar, limitarRequisicoes, tratarErros
 │   ├── repositories/          # repositories usados por vários módulos (ex.: auditoria)
 │   ├── utils/                 # turnos, horasUteis, telefone, cripto, sanitizar, datas, AppError,
-│   │                          # versaoDados, cache e paginacao
+│   │                          # versaoDados, cache, paginacao e nomes
 │   ├── docs/
 │   │   ├── openapi.base.yaml  # parte comum do contrato: informações, segurança e formato de erro
 │   │   └── swagger.js         # junta o base com o contrato de cada módulo e publica o Swagger
@@ -125,6 +126,7 @@ backend/
 │       ├── auth/
 │       ├── pesquisa/          # rotas públicas: sessões, respostas, nota, manifestação do paciente
 │       ├── setores/
+│       ├── etapas/            # etapas da jornada do paciente
 │       ├── turnos/
 │       ├── equipes/
 │       ├── usuarios/
@@ -275,6 +277,9 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | --- | --- | --- | --- | --- |
 | `GET` `POST` | `/api/setores` | SA (G: leitura dos seus) | Listar e cadastrar setores | RF20 |
 | `PATCH` | `/api/setores/:id` | SA | Editar e ativar/desativar | RF20 |
+| `GET` `POST` | `/api/etapas` | SA (G: leitura) | Listar e cadastrar etapas da jornada | RF06, RF20 |
+| `PATCH` | `/api/etapas/:id` | SA | Renomear e ativar/desativar | RF20 |
+| `PUT` | `/api/etapas/ordem` | SA | Reordenar todas as etapas de uma vez | RF20 |
 | `GET` | `/api/turnos` | SA, G | Listar turnos | RF20 |
 | `PUT` | `/api/turnos` | SA | Salvar a grade de turnos de uma vez, validando as 24 horas | RF20 |
 | `GET` `POST` | `/api/equipes` | SA | Listar as equipes de um setor e cadastrar equipes | RF20 |
@@ -304,10 +309,10 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `PATCH` | `/api/melhorias/:id` | SA | Editar e publicar | RF18 |
 | `GET` | `/api/indicadores` | SA, G | Todos os painéis do dashboard para os filtros escolhidos | RF27, RF28 |
 | `GET` | `/api/indicadores/equipes` | SA, G | Nota por equipe de um setor | RF28, RN04 |
-| `GET` | `/api/exportacoes/respostas.xlsx` | SA, G | Exportação em Excel com os filtros aplicados | RF29 |
-| `GET` | `/api/relatorios/mensal.pdf` | SA, G | Relatório mensal em PDF | RF29 |
+| `GET` | `/api/indicadores/respostas.xlsx` | SA, G | Exportação em Excel com os filtros aplicados | RF29 |
+| `GET` | `/api/indicadores/relatorio-mensal.pdf` | SA, G | Relatório mensal em PDF | RF29 |
 
-Os filtros do dashboard (período, setor, turno, etapa, canal) vão na *query string*: `/api/indicadores?inicio=2026-10-01&fim=2026-10-31&setorId=2`. Para um Gestor, o service sempre limita os setores aos atribuídos a ele, mesmo que a URL peça outro (RNF10).
+Os filtros do dashboard (período, setor, turno, etapa, canal) vão na *query string*: `/api/indicadores?inicio=2026-10-01&fim=2026-10-31&setorId=2`. A exportação em Excel usa os mesmos filtros, e por isso fica sob o mesmo prefixo: o módulo `indicadores` responde por tudo o que começa com `/api/indicadores`. Para um Gestor, o service sempre limita os setores aos atribuídos a ele, mesmo que a URL peça outro (RNF10).
 
 Não há rotas de exclusão (`DELETE`) para dados com histórico (decisão D6 do modelo). A única rota `DELETE` retira a aprovação de um elogio, sem apagar a manifestação.
 
@@ -352,13 +357,18 @@ A solução é um **cache em memória com controle de versão**:
 
 1. O backend mantém um contador `versaoDados`, que aumenta toda vez que algo que afeta os indicadores é gravado: resposta, nota, manifestação, aprovação, melhoria, escala ou atendimentos.
 2. Cada resultado de indicador fica guardado em memória junto com a versão em que foi calculado.
-3. Em cada *polling*, se a versão não mudou, a API devolve o resultado guardado **sem consultar o banco**. Se mudou, recalcula e guarda de novo.
+3. Em cada *polling*, se a versão não mudou, a API devolve o resultado guardado **sem recalcular os indicadores**. Se mudou, recalcula e guarda de novo.
+
+O TV Wall usa uma rota pública, sem login, e por isso não toca o banco quando nada mudou. O dashboard é diferente: toda rota de gestão passa pelo middleware `autenticar`, que lê o usuário no banco a cada requisição (seção 4 de `seguranca-e-nuvem.md`). É o que faz a desativação de um usuário valer na hora, sem esperar o token expirar. O custo é **uma consulta leve por dashboard aberto a cada 5 segundos**, a busca do usuário pela chave primária, mesmo com os indicadores vindo do cache.
 
 | Situação | Efeito |
 | --- | --- |
-| Três TVs e dois gestores com o dashboard aberto, sem respostas novas | Nenhuma consulta ao banco |
+| Três TVs ligadas, sem respostas novas | Nenhuma consulta ao banco |
+| Dois gestores com o dashboard aberto, sem respostas novas | Uma consulta leve por dashboard a cada 5 segundos (a do usuário); os indicadores vêm do cache |
 | Uma resposta nova é gravada | Os indicadores são recalculados uma vez e aparecem em até 5 segundos em todas as telas (RNF07) |
-| Madrugada sem respostas | O banco fica sem consultas e o Neon pode suspendê-lo, economizando as horas de processamento do plano gratuito |
+| Madrugada sem respostas e sem dashboard aberto | O banco fica sem consultas e o Neon pode suspendê-lo, economizando as horas de processamento do plano gratuito |
+
+Para que um dashboard esquecido aberto não mantenha o banco acordado o dia inteiro, o frontend pausa a atualização automática enquanto a aba não está visível e a retoma, com uma busca imediata, quando ela volta a aparecer. A TV fica sempre visível, mas não pesa no banco.
 
 O cache tem limites de segurança: cada resultado expira em 5 minutos, mesmo sem mudança de versão, e o número de resultados guardados é limitado para não consumir memória. Para o Gestor, o resultado é guardado separadamente por conjunto de setores, para que um gestor nunca receba o cache de outro.
 
@@ -373,7 +383,7 @@ O mesmo *polling* do TV Wall mantém a API ativa enquanto a TV está ligada, evi
 | Processamento | Como funciona | Requisitos |
 | --- | --- | --- |
 | **Cálculo do turno** | Função pura em `utils/turnos.js`: recebe o momento e a grade de turnos ativos e devolve o turno e a data de referência, tratando turnos que atravessam a meia-noite. Coberta por testes unitários | RN03, D13 |
-| **Importação da escala** | A planilha (`.xlsx`, até 2 MB) é lida em memória com ExcelJS. Cada linha é validada: setor existente, data do mês, turno ativo e equipe cadastrada e ativa no setor da linha (sem diferenciar maiúsculas). A importação nunca cadastra equipes. Se houver erros, nada é gravado e a resposta lista as linhas com problema. Sem erros, uma única transação substitui a escala do mês | RF21 |
+| **Importação da escala** | A planilha (`.xlsx`, até 2 MB) é lida em memória com ExcelJS. Cada linha é validada: setor existente, data do mês, turno ativo e equipe cadastrada e ativa no setor da linha, sem diferenciar maiúsculas nem acentos (a *collation* das colunas de nome faz essa comparação; D16 do modelo). A importação nunca cadastra equipes. Se houver erros, nada é gravado e a resposta lista as linhas com problema. Sem erros, uma única transação substitui a escala do mês | RF21 |
 | **Exportação em Excel** | Gerada sob demanda com os mesmos filtros do dashboard. Não inclui telefones nem nomes de profissionais citados | RF28, RF29 |
 | **Relatório mensal em PDF** | Gerado sob demanda com PDFKit, com os indicadores do mês e a comparação com o mês anterior | RF29 |
 | **Alerta de 48 horas úteis** | Calculado no momento da consulta, por uma função pura em `utils/horasUteis.js` que conta só as horas de segunda a sexta. Não há tarefa agendada | RF16 |
@@ -394,7 +404,9 @@ O projeto não usa tarefas agendadas (*cron*): tudo o que depende do tempo, como
 | Teste | PostgreSQL criado pelo GitHub Actions a cada execução | Testes automáticos (seção 11) |
 | Produção | Neon, *branch* principal | Sistema publicado |
 
-Toda configuração vem de variáveis de ambiente, lidas e validadas por `config/env.js` com Zod na inicialização. Se faltar uma variável ou ela tiver um formato inválido (por exemplo, uma chave de criptografia curta), **a API não inicia** e informa qual variável está errada. Isso evita descobrir o problema só quando um paciente tentar deixar o telefone. A lista completa está em `seguranca-e-nuvem.md`.
+Os números das regras de negócio que a Ouvidoria pode pedir para mudar (validade da sessão, prazo do alerta, tentativas para "sem retorno", janela de duplicata, número de fotos por manifestação, tamanho da planilha, meses do TV Wall) ficam em `config/regras.js`, com o requisito de origem de cada um. Mudar um prazo é mudar uma linha, e os services e os testes usam a mesma constante. Limites técnicos e de segurança (limite de requisições, paginação, cache) ficam nos próprios arquivos, e limites garantidos pelo banco (`CHECK` ou tamanho de coluna, como os 300 KB de cada foto) não entram, porque mudá-los exige migração.
+
+As demais configurações vêm de variáveis de ambiente, lidas e validadas por `config/env.js` com Zod na inicialização. Se faltar uma variável ou ela tiver um formato inválido (por exemplo, uma chave de criptografia curta), **a API não inicia** e informa qual variável está errada. Isso evita descobrir o problema só quando um paciente tentar deixar o telefone. A lista completa está em `seguranca-e-nuvem.md`.
 
 ---
 
@@ -442,7 +454,10 @@ Os limites conhecidos do plano gratuito estão documentados no RNF07 (demora ap�
 | --- | --- | --- |
 | *Polling* a cada 5 segundos com cache por versão | WebSocket (Socket.IO) | Definido no RNF07: resiste às quedas do plano gratuito e não precisa de conexão aberta. O cache elimina o custo das consultas repetidas |
 | JavaScript (CommonJS) | TypeScript | Menos configuração no Jest e no Prisma; a validação com Zod protege as entradas |
-| Pastas por módulo, com camadas dentro | Pastas por camada (`controllers/`, `services/`...) | Com 14 módulos, tudo de um assunto fica junto, e as camadas continuam separadas |
+| Pastas por módulo, com camadas dentro | Pastas por camada (`controllers/`, `services/`...) | Com 15 módulos, tudo de um assunto fica junto, e as camadas continuam separadas |
+| Etapas da jornada cadastradas pelo Super Admin | Etapas fixas no código | Uma etapa nova não exige programação; desativar preserva o histórico (D15 do modelo) |
+| Nomes únicos sem diferenciar maiúsculas nem acentos, garantidos pela *collation* das colunas | Verificação no service antes de gravar; `citext` | Uma regra só, no banco, sem brecha para dois cadastros simultâneos; o `citext` não ignora acentos (D16 do modelo) |
+| Exportação e relatório sob `/api/indicadores` | Prefixos próprios (`/api/exportacoes`, `/api/relatorios`) | Usam os mesmos filtros e o mesmo módulo do dashboard; um prefixo por módulo deixa o mapa de rotas sem dependência de ordem |
 | Contrato OpenAPI escrito antes do código | Documentação gerada por comentários no código | O contrato é revisado antes da implementação e permite construir o frontend em paralelo |
 | Token no cabeçalho `Authorization` | *Cookie* `httpOnly` | Frontend e API ficam em domínios diferentes (Vercel e Render), e navegadores como o Safari bloqueiam *cookies* entre domínios. Detalhes e mitigação em `seguranca-e-nuvem.md` |
 | Fotos no banco | Serviço externo de armazenamento | Privacidade e simplicidade (seção 5.5 do modelo) |

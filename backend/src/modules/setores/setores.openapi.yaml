@@ -71,7 +71,7 @@ paths:
         '403':
           $ref: '#/components/responses/SemPermissao'
         '409':
-          description: Já existe um setor com esse nome (NOME_EM_USO) ou slug (SLUG_EM_USO)
+          description: Já existe um setor com esse nome, sem diferenciar maiúsculas nem acentos (NOME_EM_USO), ou com esse slug (SLUG_EM_USO)
           content:
             application/json:
               schema:
@@ -137,7 +137,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Erro'
         '409':
-          description: Já existe um setor com esse nome (NOME_EM_USO) ou slug (SLUG_EM_USO)
+          description: Já existe um setor com esse nome, sem diferenciar maiúsculas nem acentos (NOME_EM_USO), ou com esse slug (SLUG_EM_USO)
           content:
             application/json:
               schema:
