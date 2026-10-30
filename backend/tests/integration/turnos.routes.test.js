@@ -200,6 +200,44 @@ describe('PUT /api/turnos', () => {
     ]);
   });
 
+  it('troca os nomes de dois turnos na mesma grade (Manhã ↔ Tarde)', async () => {
+    await salvar(tokenSuperAdmin, [
+      { id: manha.id, nome: 'Tarde', horaInicio: '07:00', horaFim: '13:00' },
+      { id: tarde.id, nome: 'Manhã', horaInicio: '13:00', horaFim: '19:00' },
+      { id: noite.id, nome: 'Noite', horaInicio: '19:00', horaFim: '07:00' },
+    ]).expect(200);
+
+    expect((await gradeNoBanco()).map((turno) => turno.nome)).toEqual(['Tarde', 'Manhã', 'Noite']);
+    // Um log por turno renomeado, só com o nome de antes e o de depois
+    const logs = await prisma.logAuditoria.findMany({
+      where: { entidade: 'turno' },
+      orderBy: { id: 'asc' },
+    });
+    expect(logs.map((log) => [log.dadosAnteriores.nome, log.dadosNovos.nome])).toEqual([
+      ['Manhã', 'Tarde'],
+      ['Tarde', 'Manhã'],
+    ]);
+  });
+
+  it('roda os nomes dos três turnos na mesma grade', async () => {
+    await salvar(tokenSuperAdmin, [
+      { id: manha.id, nome: 'Noite', horaInicio: '07:00', horaFim: '13:00' },
+      { id: tarde.id, nome: 'manhã', horaInicio: '13:00', horaFim: '19:00' },
+      { id: noite.id, nome: 'TARDE', horaInicio: '19:00', horaFim: '07:00' },
+    ]).expect(200);
+    expect((await gradeNoBanco()).map((turno) => turno.nome)).toEqual(['Noite', 'manhã', 'TARDE']);
+  });
+
+  it('renomear para o nome de um turno que continua com ele = 409, sem nome provisório no banco', async () => {
+    const resposta = await salvar(tokenSuperAdmin, [
+      { id: manha.id, nome: 'Noite', horaInicio: '07:00', horaFim: '13:00' },
+      { id: tarde.id, nome: 'Tarde', horaInicio: '13:00', horaFim: '19:00' },
+      { id: noite.id, nome: 'Noite', horaInicio: '19:00', horaFim: '07:00' },
+    ]).expect(409);
+    expect(resposta.body.erro.codigo).toBe('TURNO_JA_EXISTE');
+    expect(await gradeNoBanco()).toEqual(GRADE_PADRAO);
+  });
+
   it('id inexistente = 404', async () => {
     const resposta = await salvar(tokenSuperAdmin, [
       { id: 9999, nome: 'Dia', horaInicio: '07:00', horaFim: '19:00' },

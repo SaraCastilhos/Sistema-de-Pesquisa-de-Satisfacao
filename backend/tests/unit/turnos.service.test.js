@@ -182,7 +182,7 @@ describe('turnosService.salvarGrade', () => {
     const { service, turnosRepository } = montar();
     const ordem = [];
     turnosRepository.atualizar.mockImplementation(async (id, dados) => {
-      ordem.push(`atualizar ${id}`);
+      ordem.push(`atualizar ${id} ${dados.nome}`);
       return { ...GRADE_PADRAO.find((turno) => turno.id === id), ...dados };
     });
     turnosRepository.criar.mockImplementation(async (dados) => {
@@ -207,7 +207,45 @@ describe('turnosService.salvarGrade', () => {
       },
       superAdmin,
     );
-    expect(ordem).toEqual(['atualizar 3', 'criar Noite']);
+    expect(ordem).toEqual([
+      'atualizar 3 ~renomeando-3~',
+      'atualizar 3 Noite (antiga)',
+      'criar Noite',
+    ]);
+  });
+
+  it('troca de nomes: dá um nome provisório a cada renomeado antes de gravar os finais', async () => {
+    const { service, turnosRepository, auditoriaRepository, tx } = montar();
+    await service.salvarGrade(
+      {
+        turnos: [
+          item({ id: 1, nome: 'Tarde', horaInicio: '07:00', horaFim: '13:00' }),
+          item({ id: 2, nome: 'Manhã', horaInicio: '13:00', horaFim: '19:00' }),
+          item({ id: 3, nome: 'Noite', horaInicio: '19:00', horaFim: '07:00' }),
+        ],
+      },
+      superAdmin,
+    );
+
+    expect(turnosRepository.atualizar.mock.calls.map(([id, dados]) => [id, dados])).toEqual([
+      [1, { nome: '~renomeando-1~' }],
+      [2, { nome: '~renomeando-2~' }],
+      [1, { nome: 'Tarde' }],
+      [2, { nome: 'Manhã' }],
+    ]);
+    expect(turnosRepository.atualizar.mock.calls.every(([, , cliente]) => cliente === tx)).toBe(
+      true,
+    );
+    // O log só tem o nome de antes e o de depois, nunca o provisório
+    const logs = auditoriaRepository.registrar.mock.calls.map(([log]) => [
+      log.entidadeId,
+      log.antes.nome,
+      log.depois.nome,
+    ]);
+    expect(logs).toEqual([
+      [1, 'Manhã', 'Tarde'],
+      [2, 'Tarde', 'Manhã'],
+    ]);
   });
 
   it('não avisa o cache quando nada mudou', async () => {
