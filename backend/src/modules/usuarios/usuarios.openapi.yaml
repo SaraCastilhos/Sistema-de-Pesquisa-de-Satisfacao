@@ -1,5 +1,263 @@
 # Contrato das rotas do módulo usuarios, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Usuários
-    description: Cadastro de usuários e setores dos gestores
-paths: {}
+    description: Cadastro de Super Admins e gestores e atribuição de setores (RF20, RN10)
+paths:
+  /api/usuarios:
+    get:
+      tags: [Usuários]
+      summary: Lista os usuários (só Super Admin)
+      description: >
+        Lista paginada, em ordem de nome, com os setores de cada gestor. Nenhuma resposta traz a
+        senha nem o hash dela.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: tamanho
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: perfil
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [SUPER_ADMIN, GESTOR]
+        - name: ativo
+          in: query
+          required: false
+          description: Filtra por usuários ativos (true) ou desativados (false). Sem o filtro, vêm todos.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Página de usuários
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsuarioPagina'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+    post:
+      tags: [Usuários]
+      summary: Cadastra um usuário (só Super Admin)
+      description: >
+        O e-mail é gravado em minúsculas e não se repete. A senha tem no mínimo 10 caracteres e é
+        gravada com bcrypt (custo 12); ela nunca aparece na resposta nem no log. Pode haver mais de
+        um Super Admin. Os setores de um gestor são atribuídos depois, em PUT /api/usuarios/{id}/setores.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioEntrada'
+            example:
+              nome: Gestora do Pronto Atendimento
+              email: gestora.pa@exemplo.com
+              perfil: GESTOR
+              senha: senha-provisoria-123
+      responses:
+        '201':
+          description: Usuário criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '409':
+          description: Já existe um usuário com esse e-mail (EMAIL_EM_USO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/usuarios/{id}:
+    patch:
+      tags: [Usuários]
+      summary: Edita, desativa, reativa ou define uma senha temporária (só Super Admin)
+      description: >
+        Envie só os campos que mudam. A senha enviada aqui é a senha temporária para quem esqueceu
+        a sua (não há recuperação por e-mail). O perfil não muda por esta rota. Usuários nunca são
+        apagados (D6); desativado, o usuário perde o acesso na requisição seguinte, mesmo com o
+        token ainda válido. Ninguém pode desativar o próprio usuário. A alteração é registrada no
+        log, sem a senha.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioAlteracao'
+            examples:
+              desativar:
+                summary: Desativar
+                value: { ativo: false }
+              senhaTemporaria:
+                summary: Senha temporária
+                value: { senha: nova-senha-provisoria }
+      responses:
+        '200':
+          description: Usuário alterado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Usuário não encontrado (USUARIO_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Já existe um usuário com esse e-mail (EMAIL_EM_USO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: Tentativa de desativar o próprio usuário (AUTODESATIVACAO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/usuarios/{id}/setores:
+    put:
+      tags: [Usuários]
+      summary: Define os setores de um gestor (só Super Admin)
+      description: >
+        Substitui todos os setores do gestor pelos da lista, numa transação. Lista vazia tira todos.
+        Um gestor pode ter vários setores, e um setor pode ter vários gestores (RN10). A mudança
+        vale na requisição seguinte do gestor e é registrada no log.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioSetores'
+            example: { setorIds: [1, 2] }
+      responses:
+        '200':
+          description: Gestor com os setores novos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Usuario'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Usuário não encontrado (USUARIO_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            O usuário é Super Admin, que já vê todos os setores (USUARIO_NAO_E_GESTOR), ou algum
+            setor da lista não existe (SETOR_INEXISTENTE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    Usuario:
+      type: object
+      required: [id, nome, email, perfil, ativo, setores, criadoEm, atualizadoEm]
+      properties:
+        id: { type: integer, examples: [2] }
+        nome: { type: string, examples: [Gestora do Pronto Atendimento] }
+        email: { type: string, format: email, examples: [gestora.pa@exemplo.com] }
+        perfil: { type: string, enum: [SUPER_ADMIN, GESTOR] }
+        ativo: { type: boolean, examples: [true] }
+        setores:
+          type: array
+          description: Setores atribuídos (só gestores têm)
+          items:
+            type: object
+            required: [id, nome]
+            properties:
+              id: { type: integer, examples: [1] }
+              nome: { type: string, examples: [Pronto Atendimento] }
+        criadoEm: { type: string, format: date-time }
+        atualizadoEm: { type: string, format: date-time }
+    UsuarioPagina:
+      type: object
+      required: [itens, total, pagina, tamanho]
+      properties:
+        itens:
+          type: array
+          items:
+            $ref: '#/components/schemas/Usuario'
+        total: { type: integer }
+        pagina: { type: integer }
+        tamanho: { type: integer }
+    UsuarioEntrada:
+      type: object
+      additionalProperties: false
+      required: [nome, email, perfil, senha]
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254, description: Gravado em minúsculas }
+        perfil: { type: string, enum: [SUPER_ADMIN, GESTOR] }
+        senha: { type: string, minLength: 10, maxLength: 200 }
+    UsuarioAlteracao:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        ativo: { type: boolean }
+        senha:
+          type: string
+          minLength: 10
+          maxLength: 200
+          description: Senha temporária definida pelo Super Admin
+    UsuarioSetores:
+      type: object
+      additionalProperties: false
+      required: [setorIds]
+      properties:
+        setorIds:
+          type: array
+          maxItems: 200
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
