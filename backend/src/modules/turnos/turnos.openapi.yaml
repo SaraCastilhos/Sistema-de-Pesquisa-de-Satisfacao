@@ -1,5 +1,166 @@
 # Contrato das rotas do módulo turnos, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Turnos
-    description: Grade de turnos
-paths: {}
+    description: Grade de turnos do hospital (RF20)
+paths:
+  /api/turnos:
+    get:
+      tags: [Turnos]
+      summary: Lista os turnos
+      description: >
+        A grade é a mesma para todos os setores. Super Admin e Gestor veem todos os turnos,
+        os ativos primeiro, cada grupo na ordem do horário de início.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ativo
+          in: query
+          required: false
+          description: Filtra por turnos ativos (true) ou desativados (false). Sem o filtro, vêm todos.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Lista de turnos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Turno'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+    put:
+      tags: [Turnos]
+      summary: Salva a grade de turnos inteira (só Super Admin)
+      description: >
+        Envie a grade inteira. Item com id altera o turno; item sem id cria um turno novo.
+        Um turno ativo que não vier na lista é desativado. Nada é apagado (D6): para tirar um turno
+        de uso, envie ativo = false ou deixe-o fora da lista. Tudo é gravado numa única transação,
+        e só se os turnos ativos cobrirem as 24 horas do dia sem sobreposição; um turno com início
+        maior que o fim atravessa a meia-noite (D13). Mudar o horário vale só para as sessões
+        novas. Cada turno criado, alterado ou desativado é registrado no log. A resposta é a grade
+        completa, como no GET.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TurnoGrade'
+            examples:
+              doisPlantoes:
+                summary: Trocar Manhã, Tarde e Noite por 2 plantões de 12 h
+                description: >
+                  Com os turnos do povoamento (1 Manhã, 2 Tarde, 3 Noite): cria o "Dia", mantém a
+                  Noite e desativa Manhã e Tarde, que ficaram fora da lista.
+                value:
+                  turnos:
+                    - { nome: Dia, horaInicio: '07:00', horaFim: '19:00' }
+                    - { id: 3, nome: Noite, horaInicio: '19:00', horaFim: '07:00' }
+              comLacuna:
+                summary: Grade com lacuna (recusada com 422)
+                value:
+                  turnos:
+                    - { id: 1, nome: Manhã, horaInicio: '07:00', horaFim: '13:00' }
+                    - { id: 2, nome: Tarde, horaInicio: '14:00', horaFim: '19:00' }
+                    - { id: 3, nome: Noite, horaInicio: '19:00', horaFim: '07:00' }
+      responses:
+        '200':
+          description: Grade salva; devolve todos os turnos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Turno'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Um id da lista não existe (TURNO_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: >
+            Já existe um turno com esse nome, sem diferenciar maiúsculas nem acentos, inclusive entre
+            os desativados (TURNO_JA_EXISTE). Nada é gravado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            Os turnos ativos não cobrem as 24 horas, se sobrepõem, ou um turno começa e termina no
+            mesmo horário (GRADE_DE_TURNOS_INVALIDA). Os detalhes listam cada problema. Nada é
+            gravado e a grade anterior continua valendo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              example:
+                erro:
+                  codigo: GRADE_DE_TURNOS_INVALIDA
+                  mensagem: Os turnos ativos precisam cobrir as 24 horas do dia, sem sobreposição.
+                  detalhes: [{ campo: body.turnos, mensagem: 'Falta cobrir 13:00–14:00.' }]
+components:
+  schemas:
+    Turno:
+      type: object
+      required: [id, nome, horaInicio, horaFim, ativo, criadoEm, atualizadoEm]
+      properties:
+        id: { type: integer, examples: [1] }
+        nome: { type: string, examples: [Manhã] }
+        horaInicio: { type: string, examples: ['07:00'] }
+        horaFim: { type: string, examples: ['13:00'] }
+        ativo: { type: boolean, examples: [true] }
+        criadoEm: { type: string, format: date-time }
+        atualizadoEm: { type: string, format: date-time }
+    TurnoItemGrade:
+      type: object
+      additionalProperties: false
+      required: [nome, horaInicio, horaFim]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: Turno existente a alterar. Sem id, um turno novo é criado
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 40
+          description: Espaços nas pontas são removidos
+        horaInicio:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          examples: ['19:00']
+        horaFim:
+          type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: Menor que o início quando o turno atravessa a meia-noite
+          examples: ['07:00']
+        ativo:
+          type: boolean
+          default: true
+    TurnoGrade:
+      type: object
+      additionalProperties: false
+      required: [turnos]
+      properties:
+        turnos:
+          type: array
+          minItems: 1
+          maxItems: 24
+          items:
+            $ref: '#/components/schemas/TurnoItemGrade'
