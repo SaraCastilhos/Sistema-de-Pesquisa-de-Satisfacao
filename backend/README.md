@@ -80,6 +80,8 @@ npm test
 
 Antes da suíte, os testes aplicam as migrações no banco de teste (`prisma migrate deploy`). Cada arquivo de teste **apaga todas as tabelas** desse banco e recria os dados de referência. Por segurança, os testes só rodam num banco cujo nome contenha `test`: se o `.env.test` apontar para o banco de desenvolvimento, eles param antes de apagar qualquer coisa.
 
+Pelo mesmo motivo, o povoamento (`npx prisma db seed`) não roda com `NODE_ENV=test`: o banco de teste é recriado pelos próprios testes, e o `@prisma/client` carrega o `.env` ao ser importado, então o povoamento gravaria no banco de desenvolvimento.
+
 A estratégia, os casos de teste (CT) e a cobertura exigida estão em [`docs/plano-e-relatorio-de-testes.md`](../docs/plano-e-relatorio-de-testes.md). Cada teste que cobre um caso do plano leva o identificador no nome, por exemplo `it('CT66 - ...')`.
 
 ## Comandos

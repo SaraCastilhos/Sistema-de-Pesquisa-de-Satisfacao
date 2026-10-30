@@ -3,14 +3,25 @@
 //   - Sempre: turnos padrão (só se ainda não houver nenhum), Super Admin inicial e versão 1 dos
 //     termos. Etapas não: cada uma pertence a um setor (D15), e o banco nasce sem setores.
 //   - Só com SEED_DEMONSTRACAO=true: dados fictícios para desenvolvimento e apresentação.
+
+// Nunca roda no ambiente de teste: o banco de teste é apagado e recriado pelos próprios testes.
+// A recusa vem antes de qualquer importação porque o @prisma/client carrega sozinho o .env ao
+// ser importado, e com NODE_ENV=test o povoamento gravaria no banco de desenvolvimento.
+if (process.env.NODE_ENV === 'test') {
+  console.error(
+    'O povoamento não roda no ambiente de teste (NODE_ENV=test): o banco de teste é recriado ' +
+      'pelos próprios testes. Veja a seção "Testes" do backend/README.md.',
+  );
+  process.exit(1);
+}
+
 const path = require('node:path');
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const { PrismaClient } = require('@prisma/client');
 
-const arquivoEnv = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
-dotenv.config({ path: path.join(__dirname, '..', arquivoEnv), quiet: true });
+dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 const CUSTO_BCRYPT = 12;
 const FUSO = 'America/Sao_Paulo';
@@ -54,10 +65,19 @@ function lerVariaveis() {
   if (!resultado.success) {
     const problemas = resultado.error.issues.map((p) => `  - ${p.path.join('.')}: ${p.message}`);
     throw new Error(
-      `Variáveis do povoamento inválidas. Confira o arquivo ${arquivoEnv}:\n${problemas.join('\n')}`,
+      `Variáveis do povoamento inválidas. Confira o arquivo .env:\n${problemas.join('\n')}`,
     );
   }
   return resultado.data;
+}
+
+// Só o nome do banco, tirado do DATABASE_URL: nunca o usuário, a senha ou o endereço
+function nomeDoBanco(endereco) {
+  try {
+    return new URL(endereco).pathname.replace(/^\//, '') || '(sem nome)';
+  } catch {
+    return '(DATABASE_URL ausente ou inválida)';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -638,6 +658,7 @@ async function criarDemonstracao(prisma, superAdmin, variaveis) {
 
 async function main() {
   const variaveis = lerVariaveis();
+  console.log(`Banco de dados: ${nomeDoBanco(process.env.DATABASE_URL)}.`);
   const prisma = new PrismaClient();
   try {
     await criarTurnos(prisma);
