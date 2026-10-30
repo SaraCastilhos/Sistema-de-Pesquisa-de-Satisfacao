@@ -10,7 +10,7 @@ Este documento define as convenções de nomenclatura, tipos, migrações e escr
 
 ### 1.1 Regras gerais
 
-- Português, sem acentos nem cedilha (`sessao`, `manifestacao`, `opcao_pergunta`).
+- Português, sem acentos nem cedilha (`sessao`, `manifestacao`, `tentativa_contato`).
 - `snake_case` em minúsculas: palavras separadas por `_`.
 - Nomes completos, sem abreviações: `quantidade`, e não `qtd`. A exceção são siglas consagradas, como `url` e `id`.
 - Nenhuma palavra reservada do SQL como nome (`user`, `order`, `date`). A coluna `escala.data` é permitida porque `data` não é reservada no PostgreSQL.
@@ -20,8 +20,8 @@ Este documento define as convenções de nomenclatura, tipos, migrações e escr
 | Regra | Exemplo | Motivo |
 | --- | --- | --- |
 | Substantivo no **singular** | `setor`, `pergunta`, `sessao` | Os plurais em português são irregulares (`opcoes`, `sessoes`, `manifestacoes`), e o singular coincide com o nome do modelo no Prisma |
-| Tabela de ligação N:N: nomes das duas tabelas | `gestor_setor`, `sessao_etapa` | Deixa claro quais entidades ela liga |
-| Tabela que pertence a outra: entidade + dona | `opcao_pergunta`, `anexo_manifestacao` | Evita nomes genéricos como `opcao` ou `anexo` |
+| Tabela de ligação N:N: nomes das duas tabelas | `gestor_setor` | Deixa claro quais entidades ela liga |
+| Tabela que pertence a outra: entidade + dona | `anexo_manifestacao` | Evita nomes genéricos como `anexo` |
 
 ### 1.3 Colunas
 
@@ -31,18 +31,16 @@ Este documento define as convenções de nomenclatura, tipos, migrações e escr
 | Chave estrangeira | `<tabela_referenciada>_id` | `setor_id`, `pergunta_id` |
 | Chave estrangeira para usuário que fez uma ação | `<ação>_por_id` | `importada_por_id`, `criado_por_id` |
 | Momento (data com hora) | Particípio + `_em` | `criado_em`, `concluida_em`, `finalizada_em` |
-| Data sem hora | Substantivo descritivo | `data_atendimento`, `competencia`, `realizada_em`* |
-| Booleano | Adjetivo ou particípio, sem prefixo `is_`/`flag_` | `ativo`, `pulada`, `publicada`, `pediu_retorno` |
-| Valor de resposta | `valor_<tipo>` | `valor_numero`, `valor_booleano`, `valor_data` |
+| Data sem hora | Substantivo descritivo | `data_atendimento`, `competencia`, `data_ocorrencia` |
+| Booleano | Adjetivo, particípio ou verbo de ação, sem prefixo `is_`/`flag_` | `ativo`, `pulada`, `pediu_retorno`, `exibir_tv_wall` |
+| Valor de resposta | `valor_<tipo>` | `valor_numero` (o único desde que toda pergunta é um rostinho) |
 | Dado protegido | Nome do dado + forma de proteção | `senha_hash`, `telefone_cifrado`, `telefone_hash` |
-
-\* `melhoria.realizada_em` é uma data (`DATE`), e não um momento, porque a Ouvidoria registra apenas o dia em que a melhoria foi feita. O sufixo `_em` foi mantido pela leitura natural ("realizada em 10/10").
 
 O gênero do particípio concorda com a tabela: `sessao.concluida_em`, `manifestacao.finalizada_em`, mas `usuario.criado_em`. As colunas de controle `criado_em` e `atualizado_em` ficam sempre no masculino, em todas as tabelas, para que qualquer consulta genérica (como a do log de auditoria) use o mesmo nome.
 
 ### 1.4 Tipos enumerados
 
-- Nome do tipo: `snake_case`, no formato `<assunto>_<entidade>` (`status_manifestacao`, `tipo_pergunta`).
+- Nome do tipo: `snake_case`, no formato `<assunto>_<entidade>` (`status_manifestacao`, `tipo_manifestacao`).
 - Valores: MAIÚSCULAS, sem acentos, com `_` entre palavras (`EM_CONTATO`, `SUPER_ADMIN`).
 
 Um tipo enumerado é usado quando os valores possíveis são fixos e definidos pelos requisitos, como os status do RF15. Quando a lista é editável pelo usuário ou precisa de mais informações (nome exibido, ordem), usa-se uma tabela, como `etapa` e `turno`.
@@ -112,7 +110,7 @@ No banco vale o padrão do SQL (`snake_case`), e no código JavaScript vale o pa
 
 | Elemento | No banco | No Prisma | Como |
 | --- | --- | --- | --- |
-| Tabela | `opcao_pergunta` | `model OpcaoPergunta` | `@@map("opcao_pergunta")` |
+| Tabela | `anexo_manifestacao` | `model AnexoManifestacao` | `@@map("anexo_manifestacao")` |
 | Coluna | `nota_geral` | `notaGeral` | `@map("nota_geral")` |
 | Tipo enumerado | `status_manifestacao` | `enum StatusManifestacao` | `@@map("status_manifestacao")` |
 | Relação | `setor_id` | `setorId` e `setor` | `@relation(fields: [setorId], references: [id])` |

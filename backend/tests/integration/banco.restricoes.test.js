@@ -1,7 +1,7 @@
 const { prisma } = require('../../src/config/prisma');
 const { paraDataBanco, paraHoraBanco } = require('../../src/utils/datas');
 const { limparBanco } = require('../helpers/banco');
-const { criarSetor, criarPergunta, criarSessao } = require('../helpers/fabricas');
+const { criarSetor, criarEtapa, criarPergunta, criarSessao } = require('../helpers/fabricas');
 
 // CT61: o banco recusa dados inválidos mesmo sem passar pela API (seção 6 do modelo de dados).
 // Para CADA restrição CHECK da migração: um registro inválido gravado direto pelo Prisma é
@@ -11,7 +11,6 @@ const { criarSetor, criarPergunta, criarSessao } = require('../helpers/fabricas'
 let ref; // dados de referência criados por limparBanco()
 let setor;
 let perguntaRostinho;
-let perguntaDataPeriodo;
 let manifestacaoComAnexo;
 let n = 0;
 const unico = () => ++n;
@@ -152,12 +151,6 @@ const casos = [
     invalido: () => atendimento({ quantidade: 0 }),
   },
   {
-    restricao: 'ck_pergunta_data_periodo_sem_etapa',
-    valido: () => criarPergunta({ setorId: setor.id, tipo: 'DATA_PERIODO', etapaId: null }),
-    invalido: () =>
-      criarPergunta({ setorId: setor.id, tipo: 'DATA_PERIODO', etapaId: ref.etapas[0].id }),
-  },
-  {
     restricao: 'ck_sessao_nota_faixa',
     valido: () => sessao({ notaGeral: 10, concluidaEm: new Date() }),
     invalido: () => sessao({ notaGeral: 11, concluidaEm: new Date() }),
@@ -168,20 +161,10 @@ const casos = [
     invalido: () => sessao({ notaGeral: 5, concluidaEm: null }),
   },
   {
-    restricao: 'ck_resposta_valor_numero_faixa',
-    valido: () => resposta({ valorNumero: 10 }),
-    invalido: () => resposta({ valorNumero: 11 }),
-  },
-  {
-    restricao: 'ck_resposta_data_com_turno',
-    valido: () =>
-      resposta({ perguntaId: perguntaDataPeriodo.id, valorData: DATA, turnoId: ref.turnos[2].id }),
-    invalido: () => resposta({ perguntaId: perguntaDataPeriodo.id, valorData: DATA }),
-  },
-  {
-    restricao: 'ck_resposta_valor_unico',
-    valido: () => resposta({ pulada: true }),
-    invalido: () => resposta({ pulada: true, valorNumero: 3 }),
+    // Os outros jeitos de violar esta regra estão no describe logo abaixo da lista
+    restricao: 'ck_resposta_rostinho',
+    valido: () => resposta({ valorNumero: 5 }),
+    invalido: () => resposta({ valorNumero: 6 }),
   },
   {
     restricao: 'ck_manifestacao_origem_sessao',
@@ -246,23 +229,6 @@ const casos = [
     invalido: () => manifestacao({ ...finalizada(), tipo: null }),
   },
   {
-    restricao: 'ck_manifestacao_tv_wall',
-    valido: () =>
-      manifestacao({
-        tipo: 'ELOGIO',
-        textoTvWall: 'Equipe muito atenciosa.',
-        aprovadaTvWallEm: new Date(),
-        aprovadaTvWallPorId: ref.superAdmin.id,
-      }),
-    invalido: () =>
-      manifestacao({
-        tipo: 'RECLAMACAO',
-        textoTvWall: 'Demorou muito.',
-        aprovadaTvWallEm: new Date(),
-        aprovadaTvWallPorId: ref.superAdmin.id,
-      }),
-  },
-  {
     restricao: 'ck_anexo_manifestacao_tipo_mime',
     valido: () => anexo(10, { tipoMime: 'image/webp' }),
     invalido: () => anexo(10, { tipoMime: 'application/pdf' }),
@@ -282,12 +248,8 @@ const casos = [
 beforeAll(async () => {
   ref = await limparBanco();
   setor = await criarSetor();
-  perguntaRostinho = await criarPergunta({ setorId: setor.id, etapaId: ref.etapas[0].id });
-  perguntaDataPeriodo = await criarPergunta({
-    setorId: setor.id,
-    tipo: 'DATA_PERIODO',
-    etapaId: null,
-  });
+  const etapa = await criarEtapa({ setorId: setor.id });
+  perguntaRostinho = await criarPergunta({ etapaId: etapa.id });
   manifestacaoComAnexo = await outroCanal({ origem: 'PAPEL' });
 });
 
@@ -309,11 +271,27 @@ describe('CT61 - restrições CHECK do banco', () => {
       await expect(valido()).resolves.toHaveProperty('id');
     });
   });
+
+  // Toda pergunta é um rostinho de 1 a 5 (RF04, RF22): a regra tem quatro jeitos de ser violada
+  it.each([
+    ['rostinho 0', { valorNumero: 0 }],
+    ['rostinho 6', { valorNumero: 6 }],
+    ['pulada com valor', { pulada: true, valorNumero: 3 }],
+    ['respondida sem valor', { pulada: false }],
+  ])('CT61 - ck_resposta_rostinho recusa %s', async (_, dados) => {
+    await expect(resposta(dados)).rejects.toThrow('ck_resposta_rostinho');
+  });
+
+  it('CT61 - ck_resposta_rostinho aceita a pergunta pulada sem valor e o rostinho 1', async () => {
+    await expect(resposta({ pulada: true })).resolves.toHaveProperty('id');
+    await expect(resposta({ valorNumero: 1 })).resolves.toHaveProperty('id');
+  });
 });
 
 // CT86: nomes cadastrados são únicos sem diferenciar maiúsculas nem acentos (D16, RN13).
 // A regra é da collation das colunas, então vale mesmo gravando direto pelo Prisma.
-describe('CT86 - nomes sem diferenciar maiúsculas nem acentos', () => {
+// CT87: o nome da etapa é único dentro do setor, não no hospital (D15).
+describe('CT86 e CT87 - nomes sem diferenciar maiúsculas nem acentos', () => {
   it('CT86 - recusa setor, turno e etapa que só mudam em maiúsculas ou acentos', async () => {
     await prisma.setor.create({ data: { nome: 'Recepção Central', slug: 'recepcao-central' } });
     await expect(
@@ -337,9 +315,16 @@ describe('CT86 - nomes sem diferenciar maiúsculas nem acentos', () => {
       }),
     ).rejects.toThrow('nome');
 
-    // limparBanco() cria a etapa "Médico"
-    await expect(prisma.etapa.create({ data: { nome: 'medico', ordem: 90 } })).rejects.toThrow(
-      'nome',
+    // Etapas: o nome é único dentro do setor (D15)
+    await criarEtapa({ setorId: setor.id, nome: 'Médico' });
+    await expect(criarEtapa({ setorId: setor.id, nome: 'medico' })).rejects.toThrow('nome');
+  });
+
+  it('CT87 - aceita o mesmo nome de etapa em outro setor', async () => {
+    const outroSetor = await criarSetor();
+    await criarEtapa({ setorId: setor.id, nome: 'Farmácia' });
+    await expect(criarEtapa({ setorId: outroSetor.id, nome: 'farmacia' })).resolves.toHaveProperty(
+      'id',
     );
   });
 

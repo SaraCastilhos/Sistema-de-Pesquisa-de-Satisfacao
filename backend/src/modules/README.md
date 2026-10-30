@@ -104,7 +104,7 @@ Descreva cada rota no `<módulo>.openapi.yaml`, com `security: [bearerAuth: []]`
 
 - `tests/unit/<módulo>.service.test.js`: service com repository falso (`jest.fn()`), sem banco. Veja `setores.service.test.js`.
 - `tests/integration/<módulo>.routes.test.js`: rotas com Supertest e banco de teste. Comece com `await limparBanco()` (`tests/helpers/banco.js`) no `beforeAll` ou no `beforeEach`.
-- Dados: `tests/helpers/fabricas.js` (`criarSetor`, `criarEquipe`, `criarPergunta`, `criarSessao`, `criarUsuario` — que devolve `{ usuario, senha, token }`). Para tabelas sem fábrica (resposta, escala, atendimento, manifestação, melhoria), crie os registros com o `prisma` direto no próprio arquivo de teste.
+- Dados: `tests/helpers/fabricas.js` (`criarSetor`, `criarEquipe`, `criarEtapa`, `criarPergunta`, `criarSessao`, `criarUsuario` — que devolve `{ usuario, senha, token }`). Cada etapa pertence a um setor e cada pergunta a uma etapa: sem `etapaId`, `criarPergunta` cria uma etapa num setor novo. O `limparBanco()` não cria etapas. Para tabelas sem fábrica (resposta, escala, atendimento, manifestação), crie os registros com o `prisma` direto no próprio arquivo de teste.
 - Os limites de requisição são zerados antes de cada teste automaticamente (`tests/setup.js`).
 - Teste que cobre um caso do plano de testes leva o identificador no nome: `it('CT42 - recusa grade com lacuna', ...)`.
 - Antes do PR: `npm run lint` e `npm test` verdes.

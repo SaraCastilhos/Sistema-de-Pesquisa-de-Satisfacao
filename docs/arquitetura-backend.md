@@ -1,7 +1,7 @@
 # Arquitetura do Backend — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.11 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.12 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
 
 Este documento descreve como o backend é organizado: as tecnologias, as camadas, os padrões de projeto, o contrato da API e as decisões que garantem manutenibilidade, segurança e escalabilidade. Os detalhes de segurança e hospedagem estão em [`seguranca-e-nuvem.md`](seguranca-e-nuvem.md), e as consultas ao banco em [`mapeamento-classes-e-consultas.md`](mapeamento-classes-e-consultas.md).
 
@@ -126,7 +126,7 @@ backend/
 │       ├── auth/
 │       ├── pesquisa/          # rotas públicas: sessões, respostas, nota, manifestação do paciente
 │       ├── setores/
-│       ├── etapas/            # etapas da jornada do paciente
+│       ├── etapas/            # etapas da jornada de cada setor
 │       ├── turnos/
 │       ├── equipes/
 │       ├── usuarios/
@@ -134,8 +134,7 @@ backend/
 │       ├── atendimentos/
 │       ├── perguntas/
 │       ├── termos/
-│       ├── manifestacoes/     # Ouvidoria: lista, tentativas, finalização, anexos, TV Wall
-│       ├── melhorias/
+│       ├── manifestacoes/     # Ouvidoria: lista, classificação, tentativas, finalização, anexos
 │       ├── indicadores/       # dashboard, exportação e relatório
 │       └── tvwall/
 └── tests/
@@ -224,7 +223,7 @@ sequenceDiagram
     S->>R: buscar sessão e pergunta
     R->>DB: SELECT
     DB-->>R: sessão e pergunta
-    S->>S: sessão aberta há menos de 12 h?<br/>pergunta do setor e de etapa vivida?<br/>valor compatível com o tipo?
+    S->>S: sessão aberta há menos de 12 h?<br/>pergunta ativa, de etapa ativa do setor?<br/>rostinho de 1 a 5?
     S->>R: gravar resposta
     R->>DB: INSERT (única por sessão e pergunta)
     DB-->>R: ok
@@ -251,15 +250,15 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 
 | Método | Rota | Função | Requisitos |
 | --- | --- | --- | --- |
-| `GET` | `/api/publico/pesquisas/:slug` | Dados para montar a pesquisa do setor: etapas, perguntas ativas com alternativas e turnos | RF01, RF04, RF06 |
+| `GET` | `/api/publico/pesquisas/:slug` | Dados para montar a pesquisa do setor: as etapas do setor com as perguntas ativas (todas rostinhos) e os turnos | RF01, RF04, RF06 |
 | `POST` | `/api/publico/sessoes` | Abre uma sessão (setor e canal) | RF02, RF13 |
 | `GET` | `/api/publico/sessoes/:id` | Situação da sessão, para retomar de onde parou | RF13 |
-| `PUT` | `/api/publico/sessoes/:id/etapas` | Grava as etapas que o paciente viveu | RF06 |
+| `PUT` | `/api/publico/sessoes/:id/atendimento` | Grava a data e o período informados na tela do celular (uma vez só) | RN03 |
 | `POST` | `/api/publico/sessoes/:id/respostas` | Grava uma resposta ou um pulo | RF03, RF07 |
 | `PUT` | `/api/publico/sessoes/:id/nota` | Grava a nota geral | RF03, RF08 |
 | `POST` | `/api/publico/sessoes/:id/manifestacoes` | Registra a mensagem do paciente para a Ouvidoria, sem tipo (a classificar) e com telefone opcional | RF09, RF10, RN12 |
 | `GET` | `/api/publico/termos` | Texto vigente dos termos de privacidade | RF24 |
-| `GET` | `/api/publico/tv-wall` | Painéis agregados do TV Wall | RF30, RN08 |
+| `GET` | `/api/publico/tv-wall` | Painéis do TV Wall, só em porcentagem: satisfação geral, adesão, evolução e os setores e etapas marcados | RF30, RF31, RN08 |
 | `GET` | `/api/saude` | Verificação de funcionamento (usada pelo Render) | — |
 
 ### 7.2 Autenticação
@@ -276,10 +275,10 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | Método | Rota | Perfis | Função | Requisitos |
 | --- | --- | --- | --- | --- |
 | `GET` `POST` | `/api/setores` | SA (G: leitura dos seus) | Listar e cadastrar setores | RF20 |
-| `PATCH` | `/api/setores/:id` | SA | Editar e ativar/desativar | RF20 |
-| `GET` `POST` | `/api/etapas` | SA (G: leitura) | Listar e cadastrar etapas da jornada | RF06, RF20 |
-| `PATCH` | `/api/etapas/:id` | SA | Renomear e ativar/desativar | RF20 |
-| `PUT` | `/api/etapas/ordem` | SA | Reordenar todas as etapas de uma vez | RF20 |
+| `PATCH` | `/api/setores/:id` | SA | Editar, ativar/desativar e marcar para o TV Wall | RF20, RF31 |
+| `GET` `POST` | `/api/etapas` | SA (G: leitura dos seus setores) | Listar as etapas de um setor (`?setorId=`) e cadastrar etapas | RF06, RF20 |
+| `PATCH` | `/api/etapas/:id` | SA | Renomear, ativar/desativar e marcar para o TV Wall | RF20, RF31 |
+| `PUT` | `/api/etapas/ordem` | SA | Reordenar todas as etapas de um setor de uma vez | RF20 |
 | `GET` | `/api/turnos` | SA, G | Listar turnos | RF20 |
 | `PUT` | `/api/turnos` | SA | Salvar a grade de turnos de uma vez, validando as 24 horas | RF20 |
 | `GET` `POST` | `/api/equipes` | SA | Listar as equipes de um setor e cadastrar equipes | RF20 |
@@ -292,7 +291,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `POST` | `/api/escalas/importacao` | SA | Importar a planilha da escala | RF21 |
 | `GET` | `/api/atendimentos` | SA | Atendimentos informados por mês | RF25 |
 | `PUT` | `/api/atendimentos/:setorId/:competencia` | SA | Informar os atendimentos de um mês | RF25 |
-| `GET` `POST` | `/api/perguntas` | SA, G | Listar e cadastrar perguntas | RF22 |
+| `GET` `POST` | `/api/perguntas` | SA, G | Listar as perguntas de um setor, por etapa, e cadastrar perguntas de rostinho | RF22 |
 | `PATCH` | `/api/perguntas/:id` | SA, G | Editar e ativar/desativar | RF22, RF23 |
 | `PUT` | `/api/perguntas/ordem` | SA, G | Reordenar as perguntas de uma etapa | RF22 |
 | `GET` `POST` | `/api/termos` | SA | Histórico e nova versão dos termos | RF24 |
@@ -302,11 +301,8 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `PUT` | `/api/manifestacoes/:id/tipo` | SA | Classificar a manifestação ou corrigir o tipo | RF15, RN12 |
 | `POST` | `/api/manifestacoes/:id/tentativas` | SA | Registrar tentativa de contato | RF15 |
 | `POST` | `/api/manifestacoes/:id/finalizacao` | SA | Encerrar ou marcar sem retorno | RF15, RN07 |
-| `PUT` `DELETE` | `/api/manifestacoes/:id/tv-wall` | SA | Aprovar um elogio para o TV Wall ou retirar a aprovação | RF18 |
 | `POST` | `/api/manifestacoes/:id/anexos` | SA | Anexar foto do formulário em papel | RF17 |
 | `GET` | `/api/manifestacoes/:id/anexos/:anexoId` | SA | Ver a foto | RF17 |
-| `GET` `POST` | `/api/melhorias` | SA | Listar e cadastrar melhorias | RF18 |
-| `PATCH` | `/api/melhorias/:id` | SA | Editar e publicar | RF18 |
 | `GET` | `/api/indicadores` | SA, G | Todos os painéis do dashboard para os filtros escolhidos | RF27, RF28 |
 | `GET` | `/api/indicadores/equipes` | SA, G | Nota por equipe de um setor | RF28, RN04 |
 | `GET` | `/api/indicadores/respostas.xlsx` | SA, G | Exportação em Excel com os filtros aplicados | RF29 |
@@ -314,7 +310,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 
 Os filtros do dashboard (período, setor, turno, etapa, canal) vão na *query string*: `/api/indicadores?inicio=2026-10-01&fim=2026-10-31&setorId=2`. A exportação em Excel usa os mesmos filtros, e por isso fica sob o mesmo prefixo: o módulo `indicadores` responde por tudo o que começa com `/api/indicadores`. Para um Gestor, o service sempre limita os setores aos atribuídos a ele, mesmo que a URL peça outro (RNF10).
 
-Não há rotas de exclusão (`DELETE`) para dados com histórico (decisão D6 do modelo). A única rota `DELETE` retira a aprovação de um elogio, sem apagar a manifestação.
+Não há rotas de exclusão (`DELETE`) para dados com histórico (decisão D6 do modelo). Desde a revisão do design (29/10/2026), não há nenhuma rota `DELETE`: a única que existia retirava a aprovação de um elogio para o TV Wall, que saiu do sistema.
 
 ### 7.4 Respostas e erros
 
@@ -355,7 +351,7 @@ O RNF07 define que o dashboard e o TV Wall buscam dados novos **a cada 5 segundo
 
 A solução é um **cache em memória com controle de versão**:
 
-1. O backend mantém um contador `versaoDados`, que aumenta toda vez que algo que afeta os indicadores é gravado: resposta, nota, manifestação, aprovação, melhoria, escala ou atendimentos.
+1. O backend mantém um contador `versaoDados`, que aumenta toda vez que algo que afeta os indicadores é gravado: resposta, nota, data do atendimento, manifestação, escala, atendimentos ou um cadastro que aparece nos painéis (setor, etapa, pergunta e as marcações do TV Wall).
 2. Cada resultado de indicador fica guardado em memória junto com a versão em que foi calculado.
 3. Em cada *polling*, se a versão não mudou, a API devolve o resultado guardado **sem recalcular os indicadores**. Se mudou, recalcula e guarda de novo.
 
@@ -388,9 +384,10 @@ O mesmo *polling* do TV Wall mantém a API ativa enquanto a TV está ligada, evi
 | **Relatório mensal em PDF** | Gerado sob demanda com PDFKit, com os indicadores do mês e a comparação com o mês anterior | RF29 |
 | **Alerta de 48 horas úteis** | Calculado no momento da consulta, por uma função pura em `utils/horasUteis.js` que conta só as horas de segunda a sexta. Não há tarefa agendada | RF16 |
 | **Possível duplicata** | Ao registrar uma manifestação com telefone, o service procura outra com o mesmo `telefone_hash` e setor nas últimas 24 horas | RF19 |
-| **Classificação da manifestação** | O Super Admin define o tipo (elogio, reclamação ou sugestão) e pode corrigi-lo; o tipo anterior e o novo vão para o log. O tipo nunca volta a ficar vazio, e um elogio aprovado para o TV Wall só muda de tipo depois de retirada a aprovação (`409`) | RN12, RF18, RNF11 |
+| **Classificação da manifestação** | O Super Admin define o tipo (elogio, reclamação ou sugestão) e pode corrigi-lo; o tipo anterior e o novo vão para o log. O tipo nunca volta a ficar vazio | RN12, RNF11 |
 | **Finalização do chamado** | Exige o tipo definido (`422` se ainda estiver a classificar). Uma transação muda o status, grava o desfecho, apaga telefone e hash e registra o log. Se qualquer passo falhar, nada é alterado | RN07, RNF11 |
 | **Fotos de formulários** | Recebidas com multer (até 300 KB, só imagens), já reduzidas pelo frontend, e gravadas no banco | RF17 |
+| **Índice de satisfação** | Porcentagem de avaliações positivas, calculada no SQL com `FILTER`: notas a partir de `NOTA_POSITIVA_MINIMA` (7) e rostinhos a partir de `ROSTINHO_POSITIVO_MINIMO` (4), sobre as avaliações dadas (puladas não contam). O TV Wall só mostra setores e etapas marcados com pelo menos `TV_WALL_MINIMO_RESPOSTAS` (10) avaliações no mês, e nunca contagens | RF27, RF30, RF31, RN08 |
 
 O projeto não usa tarefas agendadas (*cron*): tudo o que depende do tempo, como o alerta de 48 horas e a expiração de sessões em 12 horas, é calculado no momento da consulta. Isso evita depender de um serviço extra e funciona mesmo com a API suspensa.
 
@@ -404,7 +401,7 @@ O projeto não usa tarefas agendadas (*cron*): tudo o que depende do tempo, como
 | Teste | PostgreSQL criado pelo GitHub Actions a cada execução | Testes automáticos (seção 11) |
 | Produção | Neon, *branch* principal | Sistema publicado |
 
-Os números das regras de negócio que a Ouvidoria pode pedir para mudar (validade da sessão, prazo do alerta, tentativas para "sem retorno", janela de duplicata, número de fotos por manifestação, tamanho da planilha, meses do TV Wall) ficam em `config/regras.js`, com o requisito de origem de cada um. Mudar um prazo é mudar uma linha, e os services e os testes usam a mesma constante. Limites técnicos e de segurança (limite de requisições, paginação, cache) ficam nos próprios arquivos, e limites garantidos pelo banco (`CHECK` ou tamanho de coluna, como os 300 KB de cada foto) não entram, porque mudá-los exige migração.
+Os números das regras de negócio que a Ouvidoria pode pedir para mudar (validade da sessão, prazo do alerta, tentativas para "sem retorno", janela de duplicata, número de fotos por manifestação, tamanho da planilha, meses e mínimo de avaliações do TV Wall, cortes do índice de satisfação) ficam em `config/regras.js`, com o requisito de origem de cada um. Mudar um prazo é mudar uma linha, e os services e os testes usam a mesma constante. Limites técnicos e de segurança (limite de requisições, paginação, cache) ficam nos próprios arquivos, e limites garantidos pelo banco (`CHECK` ou tamanho de coluna, como os 300 KB de cada foto) não entram, porque mudá-los exige migração.
 
 As demais configurações vêm de variáveis de ambiente, lidas e validadas por `config/env.js` com Zod na inicialização. Se faltar uma variável ou ela tiver um formato inválido (por exemplo, uma chave de criptografia curta), **a API não inicia** e informa qual variável está errada. Isso evita descobrir o problema só quando um paciente tentar deixar o telefone. A lista completa está em `seguranca-e-nuvem.md`.
 
@@ -454,8 +451,9 @@ Os limites conhecidos do plano gratuito estão documentados no RNF07 (demora ap�
 | --- | --- | --- |
 | *Polling* a cada 5 segundos com cache por versão | WebSocket (Socket.IO) | Definido no RNF07: resiste às quedas do plano gratuito e não precisa de conexão aberta. O cache elimina o custo das consultas repetidas |
 | JavaScript (CommonJS) | TypeScript | Menos configuração no Jest e no Prisma; a validação com Zod protege as entradas |
-| Pastas por módulo, com camadas dentro | Pastas por camada (`controllers/`, `services/`...) | Com 15 módulos, tudo de um assunto fica junto, e as camadas continuam separadas |
-| Etapas da jornada cadastradas pelo Super Admin | Etapas fixas no código | Uma etapa nova não exige programação; desativar preserva o histórico (D15 do modelo) |
+| Pastas por módulo, com camadas dentro | Pastas por camada (`controllers/`, `services/`...) | Com 14 módulos, tudo de um assunto fica junto, e as camadas continuam separadas |
+| Etapas de cada setor, cadastradas pelo Super Admin | Etapas fixas no código; um cadastro geral de etapas para o hospital | Uma etapa nova não exige programação, e cada setor tem a sua jornada; desativar preserva o histórico (D15 do modelo) |
+| TV Wall só em porcentagens, com setores e etapas marcados um a um | Painel por setor sempre visível; chaves gerais por painel | Não expõe quantas pessoas responderam nem setores com poucas avaliações, e deixa a Ouvidoria escolher o que vai para a sala de espera (D17 do modelo) |
 | Nomes únicos sem diferenciar maiúsculas nem acentos, garantidos pela *collation* das colunas | Verificação no service antes de gravar; `citext` | Uma regra só, no banco, sem brecha para dois cadastros simultâneos; o `citext` não ignora acentos (D16 do modelo) |
 | Exportação e relatório sob `/api/indicadores` | Prefixos próprios (`/api/exportacoes`, `/api/relatorios`) | Usam os mesmos filtros e o mesmo módulo do dashboard; um prefixo por módulo deixa o mapa de rotas sem dependência de ordem |
 | Contrato OpenAPI escrito antes do código | Documentação gerada por comentários no código | O contrato é revisado antes da implementação e permite construir o frontend em paralelo |

@@ -94,7 +94,9 @@ paths:
       description: >
         Envie só os campos que mudam. Setores nunca são apagados: para tirar um setor de uso,
         envie ativo = false (D6). Renomear não muda o slug; mudar o slug invalida os QR Codes já
-        impressos. A alteração é registrada no log, com os dados de antes e de depois.
+        impressos. exibirTvWall = true mostra a satisfação do setor no TV Wall, se ele tiver o
+        mínimo de avaliações no mês (RF31, RN08). A alteração é registrada no log, com os dados de
+        antes e de depois.
       security:
         - bearerAuth: []
       parameters:
@@ -117,6 +119,9 @@ paths:
               renomear:
                 summary: Renomear
                 value: { nome: Pronto-Socorro }
+              tvWall:
+                summary: Mostrar no TV Wall
+                value: { exibirTvWall: true }
       responses:
         '200':
           description: Setor alterado
@@ -146,12 +151,16 @@ components:
   schemas:
     Setor:
       type: object
-      required: [id, nome, slug, ativo, criadoEm, atualizadoEm]
+      required: [id, nome, slug, ativo, exibirTvWall, criadoEm, atualizadoEm]
       properties:
         id: { type: integer, examples: [1] }
         nome: { type: string, examples: [Pronto Atendimento] }
         slug: { type: string, examples: [pronto-atendimento] }
         ativo: { type: boolean, examples: [true] }
+        exibirTvWall:
+          type: boolean
+          examples: [false]
+          description: Marcado pelo Super Admin para aparecer no TV Wall (RF31)
         criadoEm: { type: string, format: date-time }
         atualizadoEm: { type: string, format: date-time }
     SetorEntrada:
@@ -177,3 +186,4 @@ components:
         nome: { type: string, minLength: 1, maxLength: 80 }
         slug: { type: string, maxLength: 80, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
         ativo: { type: boolean }
+        exibirTvWall: { type: boolean }
