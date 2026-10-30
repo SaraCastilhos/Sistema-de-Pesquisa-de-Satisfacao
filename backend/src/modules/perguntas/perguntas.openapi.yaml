@@ -1,5 +1,242 @@
 # Contrato das rotas do módulo perguntas, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Perguntas
-    description: Cadastro e ordenação das perguntas
-paths: {}
+    description: Perguntas de rostinho de cada etapa do setor (RF04, RF22, RF23)
+paths:
+  /api/perguntas:
+    get:
+      tags: [Perguntas]
+      summary: Lista as etapas de um setor com as suas perguntas
+      description: >
+        As etapas do setor na ordem (inclusive as desativadas), cada uma com as suas perguntas na
+        ordem. O filtro ativa vale para as perguntas. Super Admin vê qualquer setor; Gestor, só os
+        seus (403 nos outros).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: setorId
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: ativa
+          in: query
+          required: false
+          description: Só perguntas ativas (true) ou desativadas (false). Sem o filtro, vêm todas.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Etapas do setor com as perguntas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PerguntaEtapa'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+    post:
+      tags: [Perguntas]
+      summary: Cadastra uma pergunta de rostinho no fim de uma etapa
+      description: >
+        Toda pergunta é um rostinho de 1 a 5 (RF04): não há tipo nem alternativas (enviá-los dá 400).
+        O setor da pergunta é o da etapa. O HTML e os espaços nas pontas são removidos do texto. A
+        criação é registrada no log.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerguntaEntrada'
+            example: { etapaId: 1, texto: Como você avalia o tempo de espera? }
+      responses:
+        '201':
+          description: Pergunta criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pergunta'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Etapa não encontrada (ETAPA_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: A etapa está desativada (ETAPA_INATIVA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/perguntas/ordem:
+    put:
+      tags: [Perguntas]
+      summary: Reordena as perguntas de uma etapa
+      description: >
+        Envie todas as perguntas da etapa (ativas e desativadas), cada uma uma vez, na ordem nova.
+        Grava tudo numa transação e registra no log a ordem antiga e a nova. A resposta é o setor
+        inteiro, como no GET.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerguntaOrdem'
+            example: { etapaId: 1, perguntaIds: [3, 1, 2] }
+      responses:
+        '200':
+          description: Etapas do setor com a ordem nova
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PerguntaEtapa'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Etapa não encontrada (ETAPA_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: Faltou, sobrou ou repetiu pergunta da etapa (ORDEM_INCOMPLETA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/perguntas/{id}:
+    patch:
+      tags: [Perguntas]
+      summary: Edita o texto, desativa ou reativa uma pergunta
+      description: >
+        A etapa nunca muda: para mover a pergunta, desative-a e crie outra na etapa nova. Perguntas
+        nunca são apagadas (RF23, RN09); desativada, ela sai da pesquisa e as respostas continuam nos
+        relatórios. Não é possível reativar uma pergunta de etapa desativada. O log guarda o texto
+        anterior.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PerguntaAlteracao'
+            examples:
+              desativar:
+                summary: Desativar
+                value: { ativa: false }
+              editar:
+                summary: Editar o texto
+                value: { texto: Como você avalia a limpeza do local? }
+      responses:
+        '200':
+          description: Pergunta alterada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pergunta'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Pergunta não encontrada (PERGUNTA_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: Reativar pergunta de etapa desativada (ETAPA_INATIVA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    Pergunta:
+      type: object
+      required: [id, etapaId, texto, ordem, ativa, criadoEm, atualizadoEm]
+      properties:
+        id: { type: integer, examples: [1] }
+        etapaId: { type: integer, examples: [1] }
+        texto: { type: string, examples: [Como você avalia o tempo de espera?] }
+        ordem: { type: integer, examples: [1] }
+        ativa: { type: boolean, examples: [true] }
+        criadoEm: { type: string, format: date-time }
+        atualizadoEm: { type: string, format: date-time }
+    PerguntaEtapa:
+      type: object
+      required: [id, setorId, nome, ordem, ativo, perguntas]
+      properties:
+        id: { type: integer, examples: [1] }
+        setorId: { type: integer, examples: [1] }
+        nome: { type: string, examples: [Recepção] }
+        ordem: { type: integer, examples: [1] }
+        ativo: { type: boolean, examples: [true] }
+        perguntas:
+          type: array
+          items:
+            $ref: '#/components/schemas/Pergunta'
+    PerguntaEntrada:
+      type: object
+      additionalProperties: false
+      required: [etapaId, texto]
+      properties:
+        etapaId: { type: integer, minimum: 1 }
+        texto:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: HTML e espaços nas pontas são removidos
+    PerguntaAlteracao:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        texto: { type: string, minLength: 1, maxLength: 200 }
+        ativa: { type: boolean }
+    PerguntaOrdem:
+      type: object
+      additionalProperties: false
+      required: [etapaId, perguntaIds]
+      properties:
+        etapaId: { type: integer, minimum: 1 }
+        perguntaIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { type: integer, minimum: 1 }
