@@ -98,7 +98,7 @@ A estratégia, os casos de teste (CT) e a cobertura exigida estão em [`docs/pla
 ```text
 backend/
 ├── prisma/
-│   ├── schema.prisma     # modelo de dados (19 tabelas)
+│   ├── schema.prisma     # modelo de dados (16 tabelas)
 │   ├── migrations/       # script DDL: tabelas, chaves, índices e restrições CHECK
 │   └── seed.js           # script DML: dados de referência e de demonstração
 ├── src/
