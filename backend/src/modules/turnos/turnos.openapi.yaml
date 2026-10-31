@@ -55,22 +55,25 @@ paths:
             schema:
               $ref: '#/components/schemas/TurnoGrade'
             examples:
-              doisPlantoes:
-                summary: Trocar Manhã, Tarde e Noite por 2 plantões de 12 h
+              tresTurnos:
+                summary: Trocar Dia e Noite por Manhã, Tarde e Noite
                 description: >
-                  Com os turnos do povoamento (1 Manhã, 2 Tarde, 3 Noite): cria o "Dia", mantém a
-                  Noite e desativa Manhã e Tarde, que ficaram fora da lista.
+                  Com os turnos do povoamento (1 Dia, 2 Noite): cria a Manhã e a Tarde, mantém a
+                  Noite e desativa o Dia, que ficou fora da lista.
                 value:
                   turnos:
-                    - { nome: Dia, horaInicio: '07:00', horaFim: '19:00' }
-                    - { id: 3, nome: Noite, horaInicio: '19:00', horaFim: '07:00' }
+                    - { nome: Manhã, horaInicio: '07:00', horaFim: '13:00' }
+                    - { nome: Tarde, horaInicio: '13:00', horaFim: '19:00' }
+                    - { id: 2, nome: Noite, horaInicio: '19:00', horaFim: '07:00' }
               comLacuna:
                 summary: Grade com lacuna (recusada com 422)
+                description: >
+                  Com os turnos do povoamento (1 Dia, 2 Noite): o Dia termina às 18h e a Noite
+                  começa às 19h, então falta cobrir 18:00–19:00.
                 value:
                   turnos:
-                    - { id: 1, nome: Manhã, horaInicio: '07:00', horaFim: '13:00' }
-                    - { id: 2, nome: Tarde, horaInicio: '14:00', horaFim: '19:00' }
-                    - { id: 3, nome: Noite, horaInicio: '19:00', horaFim: '07:00' }
+                    - { id: 1, nome: Dia, horaInicio: '07:00', horaFim: '18:00' }
+                    - { id: 2, nome: Noite, horaInicio: '19:00', horaFim: '07:00' }
       responses:
         '200':
           description: Grade salva; devolve todos os turnos
@@ -121,9 +124,9 @@ components:
       required: [id, nome, horaInicio, horaFim, ativo, criadoEm, atualizadoEm]
       properties:
         id: { type: integer, examples: [1] }
-        nome: { type: string, examples: [Manhã] }
+        nome: { type: string, examples: [Dia] }
         horaInicio: { type: string, examples: ['07:00'] }
-        horaFim: { type: string, examples: ['13:00'] }
+        horaFim: { type: string, examples: ['19:00'] }
         ativo: { type: boolean, examples: [true] }
         criadoEm: { type: string, format: date-time }
         atualizadoEm: { type: string, format: date-time }
