@@ -8,7 +8,8 @@ const { CUSTO_BCRYPT_TESTE } = require('./banco');
 // Fábricas de dados de teste: criam só o necessário para cada caso, com valores únicos,
 // para que cada teste deixe claro do que depende (seção 4.1 do plano de testes).
 // Use depois de limparBanco(), que cria turnos, Super Admin e termos v1 (etapas não: cada uma
-// pertence a um setor e é criada com criarEtapa).
+// pertence a um setor e é criada com criarEtapa). criarSessao cria sessões de celular, tablet ou
+// formulário de papel (canal PAPEL, RF33), com ou sem respondente e tipo de atendimento (RF32).
 let sequencia = 0;
 const proximo = () => ++sequencia;
 
@@ -50,18 +51,26 @@ async function criarPergunta({ etapaId, texto, ordem, ativa = true } = {}) {
   });
 }
 
-// nota: nota geral de 0 a 10; com nota, a sessão fica concluída (ck_sessao_conclusao)
+// nota: nota geral de 0 a 10; com nota, a sessão fica concluída (ck_sessao_conclusao).
+// turnoId: sem ele, o primeiro turno ativo; null = sessão sem turno, que só o canal PAPEL aceita
+// (ck_sessao_turno_so_papel_vazio). turnoOrigem: sem ele, CALCULADO no celular e no tablet e
+// INFORMADO no papel; ESTIMADO só no papel (ck_sessao_origem_por_canal, D19).
+// respondente e tipoAtendimento: opcionais, vazios = não informados (RF32, D18).
 async function criarSessao({
   setorId,
   turnoId,
   nota = null,
   canal = 'CELULAR',
   dataAtendimento = hojeLocal(),
+  turnoOrigem = canal === 'PAPEL' ? 'INFORMADO' : 'CALCULADO',
+  respondente = null,
+  tipoAtendimento = null,
 } = {}) {
   const setor = setorId ?? (await criarSetor()).id;
   const turno =
-    turnoId ??
-    (await prisma.turno.findFirst({ where: { ativo: true }, orderBy: { id: 'asc' } })).id;
+    turnoId === undefined
+      ? (await prisma.turno.findFirst({ where: { ativo: true }, orderBy: { id: 'asc' } })).id
+      : turnoId;
   const agora = new Date();
 
   return prisma.sessao.create({
@@ -70,6 +79,9 @@ async function criarSessao({
       turnoId: turno,
       canal,
       dataAtendimento: paraDataBanco(dataAtendimento),
+      turnoOrigem,
+      respondente,
+      tipoAtendimento,
       notaGeral: nota,
       iniciadaEm: agora,
       concluidaEm: nota === null ? null : agora,

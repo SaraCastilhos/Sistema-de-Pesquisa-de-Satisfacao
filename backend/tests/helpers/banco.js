@@ -24,8 +24,10 @@ const TABELAS = [
   'anexo_manifestacao',
 ];
 
-// Mesmos dados de referência do prisma/seed.js. Etapas não entram: cada uma pertence a um
-// setor (D15), e cada teste cria as suas com a fábrica criarEtapa.
+// Grade de 3 turnos, DE PROPÓSITO diferente da padrão do povoamento (Dia e Noite, prisma/seed.js):
+// o sistema precisa funcionar com qualquer grade válida, e esta tem mais fronteiras de horário
+// para testar (CT04, CT05). Os testes de turnos (M1) dependem dela. Etapas não entram: cada uma
+// pertence a um setor (D15), e cada teste cria as suas com a fábrica criarEtapa.
 const TURNOS = [
   { nome: 'Manhã', inicio: '07:00', fim: '13:00' },
   { nome: 'Tarde', inicio: '13:00', fim: '19:00' },

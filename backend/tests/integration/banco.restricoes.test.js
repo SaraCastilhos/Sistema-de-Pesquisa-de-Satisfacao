@@ -161,6 +161,17 @@ const casos = [
     invalido: () => sessao({ notaGeral: 5, concluidaEm: null }),
   },
   {
+    // Os outros canais estão no describe do CT92, abaixo
+    restricao: 'ck_sessao_turno_so_papel_vazio',
+    valido: () => sessao({ canal: 'PAPEL', turnoOrigem: 'INFORMADO', turnoId: null }),
+    invalido: () => sessao({ turnoId: null }),
+  },
+  {
+    restricao: 'ck_sessao_origem_por_canal',
+    valido: () => sessao({ canal: 'PAPEL', turnoOrigem: 'ESTIMADO' }),
+    invalido: () => sessao({ canal: 'PAPEL', turnoOrigem: 'CALCULADO' }),
+  },
+  {
     // Os outros jeitos de violar esta regra estão no describe logo abaixo da lista
     restricao: 'ck_resposta_rostinho',
     valido: () => resposta({ valorNumero: 5 }),
@@ -286,6 +297,44 @@ describe('CT61 - restrições CHECK do banco', () => {
     await expect(resposta({ pulada: true })).resolves.toHaveProperty('id');
     await expect(resposta({ valorNumero: 1 })).resolves.toHaveProperty('id');
   });
+});
+
+// CT92 (parte do banco): só o formulário de papel pode ficar sem turno, e a origem da data e do
+// turno combina com o canal (RF33, RN03, D19). A parte da API (data de recolhimento) é da S5.
+describe('CT92 - sessões de papel sem turno e com data estimada', () => {
+  it.each(['CELULAR', 'TABLET'])('CT92 - recusa sessão de %s sem turno', async (canal) => {
+    await expect(criarSessao({ setorId: setor.id, canal, turnoId: null })).rejects.toThrow(
+      'ck_sessao_turno_so_papel_vazio',
+    );
+  });
+
+  it.each(['INFORMADO', 'ESTIMADO'])(
+    'CT92 - aceita sessão de papel sem turno, com origem %s',
+    async (turnoOrigem) => {
+      const criada = await criarSessao({
+        setorId: setor.id,
+        canal: 'PAPEL',
+        turnoId: null,
+        turnoOrigem,
+      });
+      expect(criada).toMatchObject({ canal: 'PAPEL', turnoId: null, turnoOrigem });
+    },
+  );
+
+  it('CT92 - recusa sessão de papel com origem CALCULADO', async () => {
+    await expect(
+      criarSessao({ setorId: setor.id, canal: 'PAPEL', turnoOrigem: 'CALCULADO' }),
+    ).rejects.toThrow('ck_sessao_origem_por_canal');
+  });
+
+  it.each(['CELULAR', 'TABLET'])(
+    'CT92 - recusa sessão de %s com origem ESTIMADO',
+    async (canal) => {
+      await expect(
+        criarSessao({ setorId: setor.id, canal, turnoOrigem: 'ESTIMADO' }),
+      ).rejects.toThrow('ck_sessao_origem_por_canal');
+    },
+  );
 });
 
 // CT86: nomes cadastrados são únicos sem diferenciar maiúsculas nem acentos (D16, RN13).

@@ -1,7 +1,7 @@
 # Plano e Relatório de Testes — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 (plano) — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.12 e [Arquitetura do Backend](arquitetura-backend.md)
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.13 e [Arquitetura do Backend](arquitetura-backend.md)
 
 Este documento tem duas partes. A **Parte 1** é o plano: a estratégia, os ambientes e os casos de teste que comprovam cada requisito. A **Parte 2** é o relatório de execução, preenchido conforme os testes são executados, com os resultados, a cobertura e os defeitos encontrados.
 
@@ -46,7 +46,7 @@ A estratégia segue a pirâmide de testes: muitos testes unitários, rápidos e 
 ### 4.1 Testes automáticos
 
 - **Banco:** um PostgreSQL só para testes. No GitHub Actions, ele é criado como serviço a cada execução e descartado no fim. Na máquina de desenvolvimento, roda em Docker. Os testes **nunca** usam o banco de produção.
-- **Preparação:** antes da suíte, `prisma migrate deploy` cria todas as tabelas e restrições, exatamente como em produção. Antes de cada arquivo de teste, as tabelas são esvaziadas (`TRUNCATE ... RESTART IDENTITY CASCADE`) e os dados de referência (etapas, turnos, termos) são recriados.
+- **Preparação:** antes da suíte, `prisma migrate deploy` cria todas as tabelas e restrições, exatamente como em produção. Antes de cada arquivo de teste, as tabelas são esvaziadas (`TRUNCATE ... RESTART IDENTITY CASCADE`) e os dados de referência (turnos, termos e um Super Admin) são recriados; as etapas saíram dessa lista na revisão do design, porque cada uma pertence a um setor e cada teste cria as suas. Os testes usam uma grade de 3 turnos (Manhã, Tarde e Noite), de propósito diferente da padrão do povoamento (Dia e Noite): o sistema precisa funcionar com qualquer grade válida, e a de 3 turnos tem mais fronteiras de horário para testar (CT04, CT05).
 - **Dados de teste:** funções em `tests/helpers/` criam o mínimo necessário para cada caso (ex.: `criarSessao({ nota: 3 })`), para que cada teste deixe claro do que depende.
 - **Execução:** os testes de integração rodam em sequência (`--runInBand`), porque compartilham o banco.
 - **Variáveis de ambiente:** valores fictícios definidos no *workflow*, sem nenhum segredo de produção (seção 2 de `seguranca-e-nuvem.md`).
@@ -105,11 +105,12 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT18 | RF11 | M | Concluir a pesquisa no tablet e no celular | No tablet, volta ao início sozinha após 8 s; no celular, a tela fica parada; não há botão "Nova pesquisa" |
 | CT19 | RF13 | M | Celular: abrir de novo a pesquisa do mesmo setor em menos de 12 h | Mensagem "Você já respondeu hoje", com opção de complementar |
 | CT20 | RF13 | M | Tablet: 2 minutos sem toque no meio da pesquisa | Tela "Continuar pesquisa" ou "Nova pesquisa"; "Continuar" retoma no mesmo ponto |
-| CT21 | RF04, RF05, RF06 | M | Percorrer a pesquisa inteira | Uma pergunta por tela; todas as perguntas são rostinhos, menos a nota final; a pesquisa passa por todas as etapas do setor sem perguntar quais o paciente viveu; nenhum contador ou barra de progresso |
+| CT21 | RF04, RF05, RF06 | M | Percorrer a pesquisa inteira | Uma pergunta por tela; todas as perguntas são rostinhos, com os rótulos de "Muito insatisfeito" a "Muito satisfeito", menos a nota final, de "Nada provável" a "Extremamente provável"; as telas fixas de data e período (só no celular) e "Sobre o atendimento" aparecem antes das etapas; a pesquisa passa por todas as etapas do setor sem perguntar quais o paciente viveu; nenhum contador ou barra de progresso |
 | CT22 | RNF05 | M | 5 pessoas que não conhecem o sistema respondem a pesquisa | Cada uma conclui em até 1 minuto; pular custa 1 toque |
 | CT76 | RF10, RN06 | M | Informar telefone e tocar em "Enviar" sem marcar a autorização; depois apagar o telefone e enviar | Primeiro: aviso de autorização pendente, nada é enviado e a tela não muda; segundo: manifestação enviada anônima |
 | CT77 | RF09, RN12 | I | Enviar uma manifestação pela pesquisa; depois enviar outra com o campo `tipo` | Primeira gravada com `tipo` vazio (a classificar) e status `NOVA`; segunda `400`, pois o campo não existe no contrato |
 | CT84 | RF06, D15 | I | Buscar a pesquisa de um setor com uma etapa desativada e outra ativa mas sem perguntas ativas; responder uma pergunta da etapa desativada e uma de outro setor | As duas etapas ficam fora da pesquisa; as duas respostas dão `422` |
+| CT90 | RF32 | I | Informar quem respondeu e o tipo de atendimento pela tela "Sobre o atendimento" (`PUT /api/publico/sessoes/:id/respondente`), numa sessão de celular e noutra de tablet; repetir; enviar valor fora da lista; enviar corpo vazio | Sessões passam a ter os valores informados; a segunda vez dá `409`; valor fora da lista ou corpo vazio dá `400` |
 
 ### 6.2 Ouvidoria
 
@@ -131,6 +132,9 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT78 | RN12, RNF11 | I | Classificar uma manifestação da pesquisa como reclamação; corrigir para sugestão; tentar deixá-la sem tipo | Tipo gravado nas duas primeiras, cada uma com uma linha `ALTERACAO` no log com o tipo anterior e o novo; a terceira `400` |
 | CT79 | RN12 | I | Encerrar com desfecho um chamado ainda a classificar | `422`; nada alterado |
 | CT80 | RN12, RF18 | — | **Removido na v1.12**: sem aprovação de elogios, nenhum tipo fica travado | — |
+| CT91 | RF33 | I | Super Admin digita um formulário de papel completo; Gestor tenta digitar; digitar com uma pergunta de outro setor; digitar com data futura | Primeiro: sessão de canal `PAPEL` com as respostas, a nota e o log; Gestor: `403`; pergunta de outro setor: `422`; data futura: `400` |
+| CT92 | RF33, RN03 | B/I | Digitar um formulário de papel sem data; outro sem turno; gravar direto no banco sessão de celular ou de tablet sem turno, de papel com origem `CALCULADO` e de celular ou tablet com origem `ESTIMADO` | Sem data: data de recolhimento com origem `ESTIMADO`; sem turno: sessão aceita sem turno; as gravações diretas são recusadas pelo banco (`ck_sessao_turno_so_papel_vazio`, `ck_sessao_origem_por_canal`) |
+| CT95 | RF33, RN01, RNF11 | I | Corrigir os dados e as notas de um formulário de papel; excluir outro; tentar corrigir e excluir uma sessão de celular ou de tablet pelas rotas do papel; Gestor tenta corrigir e excluir | Correção: dados e notas trocados, log `ALTERACAO` com o estado anterior e o novo; exclusão: sessão e respostas apagadas, log `EXCLUSAO` com a sessão e todas as respostas; celular ou tablet: `404`; Gestor: `403` |
 
 ### 6.3 Administração e acesso
 
@@ -178,19 +182,21 @@ Com um caminho no formato de *glob*, o Jest aplica o limite a **cada service ind
 | CT82 | RF30, RN08 | M | Abrir o TV Wall com `/tv-wall/pronto-atendimento` e depois só com `/tv-wall` | No primeiro, o QR Code abre a pesquisa do Pronto Atendimento; no segundo, o painel do QR Code não entra no rodízio; os demais painéis são iguais nos dois |
 | CT88 | RF31, RN08 | I | Marcar um setor e uma etapa para o TV Wall (como Super Admin e como Gestor); deixar um setor marcado com menos de 10 avaliações no mês | O Gestor recebe `403`; os marcados com o mínimo aparecem no TV Wall; o de menos de 10 avaliações e os não marcados ficam fora; desmarcar tira na leitura seguinte |
 | CT89 | RF30 | U | Índice de satisfação com as notas 9, 7, 6 e 3, e com os rostinhos 5, 4 e 3 e um pulo | 50% e 67%; o pulo não conta |
+| CT93 | RF27, RF28, RN04 | I | Cenário com sessões de celular, tablet e papel (uma de papel sem turno), com quem respondeu e tipo de atendimento variados; filtrar por canal Papel, por respondente, por tipo de atendimento e por turno; pedir a nota por equipe | As sessões de papel entram nos indicadores sem filtro; cada filtro devolve só as sessões que o atendem; a sessão sem turno fica fora do filtro por turno e da nota por equipe |
+| CT94 | RF29 | I | Exportar Excel com sessões dos três canais | Cada linha traz o canal, quem respondeu, o tipo de atendimento e a origem da data e do turno (`CALCULADO`, `INFORMADO` ou `ESTIMADO`) |
 
 ### 6.5 Banco de dados, segurança e qualidade
 
 | ID | Requisito | Nível | Caso | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| CT61 | Seção 6 do modelo | B | Suíte de restrições: nota fora da faixa, rostinho fora de 1 a 5, resposta pulada com valor ou respondida sem valor, telefone sem consentimento, finalização sem anonimização, manifestação de outro canal sem tipo, finalização sem tipo, anexo acima do limite, entre outras | O banco recusa todos os registros inválidos e aceita os válidos |
+| CT61 | Seção 6 do modelo | B | Suíte de restrições: nota fora da faixa, rostinho fora de 1 a 5, resposta pulada com valor ou respondida sem valor, telefone sem consentimento, finalização sem anonimização, manifestação de outro canal sem tipo, finalização sem tipo, anexo acima do limite, sessão de celular ou tablet sem turno, origem da data incompatível com o canal, entre outras | O banco recusa todos os registros inválidos e aceita os válidos |
 | CT62 | RNF09 | I | Enviar `'; DROP TABLE sessao; --` em campos de texto e filtros | Tratado como texto comum; nenhuma tabela afetada |
 | CT63 | RNF09 | I | Enviar `<script>alert(1)</script>` no texto da manifestação | Gravado sem as tags HTML |
 | CT64 | RNF09 | I | Enviar campos que não existem no contrato da API | `400` |
 | CT65 | RNF08 | I | 61 envios em 1 minuto do mesmo IP nas rotas públicas | O 61º recebe `429` |
 | CT66 | RNF10 | U | Cifrar o mesmo telefone duas vezes e decifrar | Textos cifrados diferentes; os dois decifram para o número original; o HMAC é o mesmo |
 | CT67 | RNF09 | M | Conferir os cabeçalhos de segurança da API publicada | HSTS, `nosniff` e CORS restrito ao endereço do frontend |
-| CT68 | RNF04 | M | Auditoria de acessibilidade da pesquisa | Lighthouse Acessibilidade ≥ 90; botões ≥ 48 × 48 px; fonte ≥ 18 px; contraste ≥ 4,5:1; rostinhos com rótulo |
+| CT68 | RNF04 | M | Auditoria de acessibilidade da pesquisa | Lighthouse Acessibilidade ≥ 90; botões ≥ 48 × 48 px; fonte ≥ 18 px; contraste ≥ 4,5:1; rostinhos com os rótulos do formulário de papel (RF04) |
 | CT69 | RNF07 | M | Lighthouse da pesquisa no celular com rede 4G simulada, API já ativa | Página utilizável em menos de 3 s |
 | CT70 | RNF03 | M | Abrir cada tela nas resoluções da seção 4.2 | Sem rolagem horizontal, sem textos cortados, sem elementos sobrepostos |
 | CT86 | RN13, D16 | B/I | Gravar direto no banco setor, turno e etapa (no mesmo setor) que só mudam em maiúsculas ou acentos ("RECEPCAO central" com "Recepção Central" já cadastrado); equipe repetida no mesmo setor e em outro; "Raio X" com "Raio-X" já cadastrado; buscar "PRONTO atendimento"; criar pela API setor que só muda em maiúsculas ou acentos | Repetições recusadas pelo banco; mesma equipe em outro setor aceita; "Raio X" aceito; a busca encontra "Pronto Atendimento"; a API responde `409 NOME_EM_USO` |
