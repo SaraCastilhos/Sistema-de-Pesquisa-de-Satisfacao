@@ -13,13 +13,34 @@ paths:
         os números; a de papel sem turno fica fora do filtro por turno. Super Admin vê todos os
         setores; Gestor, só os seus (403 se pedir outro). Os resultados vêm do cache enquanto
         nenhum dado que afeta os indicadores mudar (seção 8 da arquitetura). Nunca devolve nomes de
-        profissionais. Porcentagens e notas vêm como null quando não há o que calcular. A evolução
-        vai até o fim do período, nunca depois dele.
+        profissionais. Porcentagens e notas vêm como null quando não há o que calcular.
+
+
+        Evolução: usa de propósito a mesma constante do TV Wall (REGRAS.TV_WALL_MESES_EVOLUCAO, 6
+        meses), para o gráfico do dashboard e o do TV Wall mostrarem a mesma série. Vai até o fim
+        do período, nunca depois dele.
+
+
+        Taxa de adesão com filtros: os filtros de turno, canal, quem respondeu e tipo de atendimento
+        limitam as respostas completas (o numerador), mas não os atendimentos informados (o
+        denominador), que são só por setor e mês e não têm esses campos. Com um desses filtros, a
+        taxa mostra a parte das respostas daquele grupo sobre todos os atendimentos (ex.: com
+        canal Papel, a adesão só do papel).
       security:
         - bearerAuth: []
       parameters:
-        - $ref: '#/components/parameters/IndicadoresInicio'
-        - $ref: '#/components/parameters/IndicadoresFim'
+        - name: inicio
+          in: query
+          required: true
+          description: 'Primeiro dia do período, AAAA-MM-DD (ex.: 2026-10-01)'
+          example: '2026-10-01'
+          schema: { type: string, format: date }
+        - name: fim
+          in: query
+          required: true
+          description: 'Último dia do período, AAAA-MM-DD (ex.: 2026-10-31); não pode ser antes do início'
+          example: '2026-10-31'
+          schema: { type: string, format: date }
         - name: setorId
           in: query
           required: false
@@ -86,8 +107,18 @@ paths:
           in: query
           required: true
           schema: { type: integer, minimum: 1 }
-        - $ref: '#/components/parameters/IndicadoresInicio'
-        - $ref: '#/components/parameters/IndicadoresFim'
+        - name: inicio
+          in: query
+          required: true
+          description: 'Primeiro dia do período, AAAA-MM-DD (ex.: 2026-10-01)'
+          example: '2026-10-01'
+          schema: { type: string, format: date }
+        - name: fim
+          in: query
+          required: true
+          description: 'Último dia do período, AAAA-MM-DD (ex.: 2026-10-31); não pode ser antes do início'
+          example: '2026-10-31'
+          schema: { type: string, format: date }
       responses:
         '200':
           description: Equipes da maior para a menor nota média
@@ -110,21 +141,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Erro'
 components:
-  parameters:
-    IndicadoresInicio:
-      name: inicio
-      in: query
-      required: true
-      description: 'Primeiro dia do período, AAAA-MM-DD (ex.: 2026-10-01)'
-      example: '2026-10-01'
-      schema: { type: string, format: date }
-    IndicadoresFim:
-      name: fim
-      in: query
-      required: true
-      description: 'Último dia do período, AAAA-MM-DD (ex.: 2026-10-31); não pode ser antes do início'
-      example: '2026-10-31'
-      schema: { type: string, format: date }
   schemas:
     IndicadoresResumo:
       type: object
@@ -141,7 +157,9 @@ components:
           description: >
             Respostas completas ÷ atendimentos informados, em %, só nos setores e meses com
             atendimentos informados; null = atendimentos não informados. Se o período pega só parte
-            de um mês, entra a parte proporcional dos atendimentos desse mês (ex.: 10 de 31 dias)
+            de um mês, entra a parte proporcional dos atendimentos desse mês (ex.: 10 de 31 dias).
+            Os filtros de turno, canal, quem respondeu e tipo de atendimento valem só para as
+            respostas, não para os atendimentos (veja a descrição da rota)
         elogios: { type: integer, description: Manifestações do tipo elogio no período }
     IndicadoresGrupo:
       type: object
