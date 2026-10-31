@@ -2,4 +2,164 @@
 tags:
   - name: Escalas
     description: Escala mensal (consulta, planilha-modelo e importação)
-paths: {}
+paths:
+  /api/escalas:
+    get:
+      tags: [Escalas]
+      summary: Consulta a escala de um mês (só Super Admin)
+      description: Linhas da escala do mês, em ordem de data, setor e horário do turno.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: competencia
+          in: query
+          required: true
+          description: 'Mês no formato AAAA-MM (ex.: 2026-10)'
+          example: '2026-10'
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        - name: setorId
+          in: query
+          required: false
+          description: Só a escala deste setor
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Escala do mês
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EscalaLinha'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+  /api/escalas/modelo:
+    get:
+      tags: [Escalas]
+      summary: Baixa a planilha-modelo da escala (só Super Admin)
+      description: >
+        Planilha .xlsx com as colunas Setor, Data, Turno e Equipe, uma linha de exemplo e a aba
+        "Instruções". A data é a do dia em que o turno COMEÇA (D13).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Planilha-modelo (modelo-escala.xlsx)
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+  /api/escalas/importacao:
+    post:
+      tags: [Escalas]
+      summary: Importa a escala de um mês por planilha (só Super Admin)
+      description: >
+        Recebe a planilha .xlsx (até 2 MB) e o mês. Cada linha precisa ter setor cadastrado, data
+        dentro do mês, turno ativo e equipe cadastrada e ativa no setor da linha. Os nomes são
+        comparados sem diferenciar maiúsculas, acentos e espaços nas pontas (RN13). A importação
+        nunca cria equipe, e uma linha que repete setor, data e turno é erro. Com QUALQUER erro, nada
+        é gravado e a resposta (422) lista a linha e o motivo de cada problema. Sem erros, uma
+        transação apaga a escala do mês dos setores da planilha e grava a nova. A importação é
+        registrada no log.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [competencia, arquivo]
+              properties:
+                competencia:
+                  type: string
+                  description: 'Mês no formato AAAA-MM (ex.: 2026-10)'
+                  example: '2026-10'
+                arquivo:
+                  type: string
+                  format: binary
+                  description: Planilha .xlsx no formato da planilha-modelo
+      responses:
+        '200':
+          description: Escala do mês gravada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EscalaImportacao'
+        '400':
+          description: >
+            Mês inválido (DADOS_INVALIDOS), arquivo ausente (ARQUIVO_AUSENTE), arquivo que não é .xlsx
+            (PLANILHA_INVALIDA) ou mais de um arquivo (ENVIO_INVALIDO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '413':
+          description: A planilha passa de 2 MB (ARQUIVO_GRANDE_DEMAIS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            Linhas com erro (ESCALA_COM_ERROS, com linha e motivo de cada uma nos detalhes), planilha
+            sem linhas (PLANILHA_VAZIA) ou fora do modelo (PLANILHA_FORA_DO_MODELO). Nada é gravado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              example:
+                erro:
+                  codigo: ESCALA_COM_ERROS
+                  mensagem: A planilha tem linhas a corrigir. Nada foi gravado.
+                  detalhes:
+                    - campo: arquivo
+                      linha: 3
+                      mensagem: Equipe "Equipe  A" não cadastrada no setor Pronto Atendimento.
+components:
+  schemas:
+    EscalaLinha:
+      type: object
+      required: [id, data, setor, turno, equipe, importadaEm, importadaPor]
+      properties:
+        id: { type: integer }
+        data:
+          {
+            type: string,
+            format: date,
+            description: Dia em que o turno começa,
+            examples: ['2026-10-14'],
+          }
+        setor: { $ref: '#/components/schemas/EscalaReferencia' }
+        turno: { $ref: '#/components/schemas/EscalaReferencia' }
+        equipe: { $ref: '#/components/schemas/EscalaReferencia' }
+        importadaEm: { type: string, format: date-time }
+        importadaPor: { $ref: '#/components/schemas/EscalaReferencia' }
+    EscalaReferencia:
+      type: object
+      required: [id, nome]
+      properties:
+        id: { type: integer }
+        nome: { type: string }
+    EscalaImportacao:
+      type: object
+      required: [competencia, setores, linhas, substituidas]
+      properties:
+        competencia: { type: string, examples: ['2026-10'] }
+        setores:
+          type: array
+          description: Setores da planilha, cuja escala do mês foi substituída
+          items: { type: string }
+        linhas: { type: integer, description: Linhas gravadas }
+        substituidas: { type: integer, description: Linhas da escala anterior apagadas }
