@@ -14,6 +14,11 @@ function formatar(turno) {
   };
 }
 
+// Nome que só existe dentro da transação de salvarGrade; o id o torna único
+function nomeProvisorio(id) {
+  return `~renomeando-${id}~`;
+}
+
 function paraBanco(dados) {
   return {
     ...dados,
@@ -77,6 +82,15 @@ function criarTurnosService({ turnosRepository, auditoriaRepository, prisma, ver
       const existentes = novaGrade.filter((turno) => turno.id);
       const novos = novaGrade.filter((turno) => !turno.id);
       let alterou = false;
+
+      // Troca de nomes entre turnos (Manhã vira "Tarde" e Tarde vira "Manhã"): gravados um de
+      // cada vez, o primeiro esbarraria no nome único, porque o segundo ainda tem o nome antigo.
+      // Por isso, quem muda de nome ganha antes um nome provisório e único, dentro da mesma
+      // transação. O log registra só o nome de antes e o de depois.
+      const renomeados = existentes.filter((item) => item.nome !== atuais.get(item.id).nome);
+      for (const item of renomeados) {
+        await turnosRepository.atualizar(item.id, { nome: nomeProvisorio(item.id) }, tx);
+      }
 
       for (const item of existentes) {
         const antes = atuais.get(item.id);
