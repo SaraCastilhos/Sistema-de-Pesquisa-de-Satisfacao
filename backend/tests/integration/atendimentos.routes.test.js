@@ -43,6 +43,16 @@ describe('PUT /api/atendimentos/:setorId/:competencia', () => {
     expect(gravado.informadoPorId).toBe(superAdmin.id);
   });
 
+  it('salvar de novo a mesma quantidade não registra uma alteração no log', async () => {
+    await salvar(tokenSuperAdmin, setor.id, '2026-10', { quantidade: 1000 }).expect(200);
+    const resposta = await salvar(tokenSuperAdmin, setor.id, '2026-10', {
+      quantidade: 1000,
+    }).expect(200);
+    expect(resposta.body).toMatchObject({ competencia: '2026-10', quantidade: 1000 });
+    const logs = await prisma.logAuditoria.findMany({ where: { entidade: 'atendimento_mensal' } });
+    expect(logs.map((log) => log.acao)).toEqual(['CRIACAO']);
+  });
+
   it('atualiza o mesmo mês sem criar outro registro e registra antes e depois', async () => {
     await salvar(tokenSuperAdmin, setor.id, '2026-10', { quantidade: 1000 }).expect(200);
     const resposta = await salvar(tokenSuperAdmin, setor.id, '2026-10', {

@@ -11,6 +11,13 @@ const {
 // Colunas da planilha, na ordem da planilha-modelo (RF21)
 const COLUNAS = ['Setor', 'Data', 'Turno', 'Equipe'];
 
+// Limites técnicos, não regras de negócio (por isso fora de config/regras.js). Um mês de escala
+// com 20 setores e 3 turnos tem cerca de 1.900 linhas; 5.000 deixa folga. Importar o mês por
+// setor, em partes, continua funcionando, porque cada importação só substitui os setores dela.
+const LINHAS_MAXIMAS = 5000;
+// Problemas listados na resposta: o suficiente para corrigir a planilha sem uma resposta enorme
+const ERROS_MAXIMOS = 100;
+
 const INSTRUCOES = [
   'Como preencher a escala do mês',
   '',
@@ -24,18 +31,23 @@ const INSTRUCOES = [
   'Importar de novo o mesmo mês substitui a escala desse mês dos setores que estão na planilha.',
 ];
 
-// Valor de uma célula como texto ou Date: fórmulas usam o resultado; texto formatado, só o texto
-function valorDaCelula(celula) {
-  const valor = celula.value;
+// Valor de uma célula como texto ou Date: fórmulas usam o resultado; texto formatado e link, só o
+// texto; célula com erro do Excel, o código do erro (ex.: "#N/A"), para a mensagem da linha ser
+// legível. Qualquer outro formato que o ExcelJS devolva como objeto vira texto vazio, e nunca
+// "[object Object]".
+function textoDoValor(valor) {
   if (valor === null || valor === undefined) return '';
   if (valor instanceof Date) return valor;
-  if (typeof valor === 'object') {
-    if ('result' in valor)
-      return valor.result instanceof Date ? valor.result : String(valor.result ?? '');
-    if ('richText' in valor) return valor.richText.map((parte) => parte.text).join('');
-    if ('text' in valor) return String(valor.text);
-  }
-  return String(valor);
+  if (typeof valor !== 'object') return String(valor);
+  if ('result' in valor) return textoDoValor(valor.result);
+  if ('error' in valor) return String(valor.error);
+  if ('richText' in valor) return valor.richText.map((parte) => parte.text).join('');
+  if ('text' in valor) return textoDoValor(valor.text);
+  return '';
+}
+
+function valorDaCelula(celula) {
+  return textoDoValor(celula.value);
 }
 
 // A data da planilha vira 'AAAA-MM-DD'. Aceita a célula de data do Excel (que o ExcelJS lê como
@@ -92,7 +104,15 @@ async function lerPlanilha(buffer) {
     const vazia = [setor, data, turno, equipe].every(
       (v) => !(v instanceof Date) && v.trim() === '',
     );
-    if (!vazia) linhas.push({ numero, setor, data, turno, equipe });
+    if (vazia) continue;
+    linhas.push({ numero, setor, data, turno, equipe });
+    if (linhas.length > LINHAS_MAXIMAS) {
+      throw new AppError(
+        422,
+        'PLANILHA_GRANDE_DEMAIS',
+        `A planilha passa de ${LINHAS_MAXIMAS} linhas de escala. Divida-a por setor e importe cada parte.`,
+      );
+    }
   }
   return linhas;
 }
@@ -216,11 +236,23 @@ function criarEscalasService({ escalasRepository, auditoriaRepository, prisma, v
     }
 
     if (erros.length > 0) {
+      // A resposta lista no máximo ERROS_MAXIMOS problemas, mais um aviso de quantos faltaram
+      const restantes = erros.length - ERROS_MAXIMOS;
+      const detalhes =
+        restantes > 0
+          ? [
+              ...erros.slice(0, ERROS_MAXIMOS),
+              {
+                campo: 'arquivo',
+                mensagem: `E mais ${restantes} ${restantes === 1 ? 'problema' : 'problemas'}. Corrija estes e importe de novo.`,
+              },
+            ]
+          : erros;
       throw new AppError(
         422,
         'ESCALA_COM_ERROS',
-        'A planilha tem linhas a corrigir. Nada foi gravado.',
-        erros,
+        `A planilha tem ${erros.length} ${erros.length === 1 ? 'problema' : 'problemas'} a corrigir. Nada foi gravado.`,
+        detalhes,
       );
     }
 
@@ -262,4 +294,12 @@ function criarEscalasService({ escalasRepository, auditoriaRepository, prisma, v
   return { listar, gerarModelo, importar };
 }
 
-module.exports = { criarEscalasService, lerPlanilha, lerData, COLUNAS };
+module.exports = {
+  criarEscalasService,
+  lerPlanilha,
+  lerData,
+  textoDoValor,
+  COLUNAS,
+  LINHAS_MAXIMAS,
+  ERROS_MAXIMOS,
+};

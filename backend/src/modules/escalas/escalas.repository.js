@@ -23,7 +23,9 @@ function criarEscalasRepository(prisma) {
   }
 
   // Os cadastros são lidos uma vez e comparados em memória (consulta 4.9 do mapeamento). Vêm
-  // também os desativados, para a mensagem de erro dizer "desativado" em vez de "não existe".
+  // também os desativados: turno e equipe desativados são recusados com a mensagem "está
+  // desativado(a)", e não "não cadastrado". Setor desativado é aceito, porque a regra da
+  // importação é só "setor existente" (seção 9 da arquitetura).
   function listarSetores() {
     return prisma.setor.findMany({ select: { id: true, nome: true } });
   }

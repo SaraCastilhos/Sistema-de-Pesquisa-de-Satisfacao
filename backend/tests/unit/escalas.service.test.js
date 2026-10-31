@@ -3,6 +3,9 @@ const {
   criarEscalasService,
   lerPlanilha,
   lerData,
+  textoDoValor,
+  LINHAS_MAXIMAS,
+  ERROS_MAXIMOS,
 } = require('../../src/modules/escalas/escalas.service');
 const { paraDataBanco } = require('../../src/utils/datas');
 
@@ -65,6 +68,21 @@ describe('lerData', () => {
   });
 });
 
+describe('textoDoValor', () => {
+  it.each([
+    ['texto', 'Equipe A', 'Equipe A'],
+    ['número', 3, '3'],
+    ['fórmula', { formula: 'A1', result: 'Manhã' }, 'Manhã'],
+    ['erro do Excel', { error: '#N/A' }, '#N/A'],
+    ['fórmula com erro', { formula: 'PROCV(1)', result: { error: '#REF!' } }, '#REF!'],
+    ['texto formatado', { richText: [{ text: 'Equipe ' }, { text: 'B' }] }, 'Equipe B'],
+    ['link', { text: 'Internação', hyperlink: 'http://x' }, 'Internação'],
+    ['objeto desconhecido', { qualquer: 1 }, ''],
+  ])('%s', (_, valor, esperado) => {
+    expect(textoDoValor(valor)).toBe(esperado);
+  });
+});
+
 describe('lerPlanilha', () => {
   it('lê as linhas preenchidas com o número da linha no Excel, pulando as vazias', async () => {
     const buffer = await planilha([
@@ -77,6 +95,21 @@ describe('lerPlanilha', () => {
       [2, 'Pronto Atendimento', 'Manhã'],
       [4, 'Internação', 'Noite'],
     ]);
+  });
+
+  it(`mais de ${LINHAS_MAXIMAS} linhas de escala = 422 PLANILHA_GRANDE_DEMAIS`, async () => {
+    const linhas = Array.from({ length: LINHAS_MAXIMAS + 1 }, () => [
+      'Pronto Atendimento',
+      '05/10/2026',
+      'Manhã',
+      'Equipe A',
+    ]);
+    await expect(lerPlanilha(await planilha(linhas))).rejects.toMatchObject({
+      status: 422,
+      codigo: 'PLANILHA_GRANDE_DEMAIS',
+    });
+    // No limite exato, a planilha é aceita
+    expect(await lerPlanilha(await planilha(linhas.slice(1)))).toHaveLength(LINHAS_MAXIMAS);
   });
 
   it('cabeçalho fora do modelo = 422', async () => {
@@ -168,6 +201,37 @@ describe('escalasService.importar', () => {
     ]);
     expect(escalasRepository.substituirMes).not.toHaveBeenCalled();
     expect(versaoDados.incrementar).not.toHaveBeenCalled();
+  });
+
+  it('célula com erro do Excel aparece com o código do erro na mensagem', async () => {
+    const { service } = montar();
+    const buffer = await planilha([[{ error: '#N/A' }, '05/10/2026', 'Manhã', 'Equipe A']]);
+    const erro = await service
+      .importar({ competencia: '2026-10' }, buffer, superAdmin)
+      .catch((e) => e);
+    expect(erro.detalhes[0].mensagem).toBe('Setor "#N/A" não cadastrado.');
+  });
+
+  it(`lista no máximo ${ERROS_MAXIMOS} problemas e avisa quantos faltaram`, async () => {
+    const { service } = montar();
+    const linhas = Array.from({ length: ERROS_MAXIMOS + 5 }, () => [
+      'Raio-X',
+      '05/10/2026',
+      'Manhã',
+      'Equipe A',
+    ]);
+    const erro = await service
+      .importar({ competencia: '2026-10' }, await planilha(linhas), superAdmin)
+      .catch((e) => e);
+
+    expect(erro.message).toBe(
+      `A planilha tem ${ERROS_MAXIMOS + 5} problemas a corrigir. Nada foi gravado.`,
+    );
+    expect(erro.detalhes).toHaveLength(ERROS_MAXIMOS + 1);
+    expect(erro.detalhes.at(-1)).toEqual({
+      campo: 'arquivo',
+      mensagem: 'E mais 5 problemas. Corrija estes e importe de novo.',
+    });
   });
 
   it('planilha só com o cabeçalho = 422 PLANILHA_VAZIA', async () => {
