@@ -1,6 +1,8 @@
 // Configuração dos testes (seções 4.1 e 5 de docs/plano-e-relatorio-de-testes.md)
 module.exports = {
   testEnvironment: 'node',
+  // O banco de teste pode ficar lento na suíte completa; o padrão de 5 s estourava no limparBanco()
+  testTimeout: 30000,
   roots: ['<rootDir>/tests'],
   // Uma vez antes de tudo: aplica as migrações no banco de teste
   globalSetup: '<rootDir>/tests/globalSetup.js',
