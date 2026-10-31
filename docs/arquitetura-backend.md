@@ -1,7 +1,7 @@
 # Arquitetura do Backend — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.12 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.13 e [Modelo de Dados](modelo-de-dados-e-requisitos.md) v1.0
 
 Este documento descreve como o backend é organizado: as tecnologias, as camadas, os padrões de projeto, o contrato da API e as decisões que garantem manutenibilidade, segurança e escalabilidade. Os detalhes de segurança e hospedagem estão em [`seguranca-e-nuvem.md`](seguranca-e-nuvem.md), e as consultas ao banco em [`mapeamento-classes-e-consultas.md`](mapeamento-classes-e-consultas.md).
 
@@ -124,7 +124,7 @@ backend/
 │   │   └── swagger.js         # junta o base com o contrato de cada módulo e publica o Swagger
 │   └── modules/
 │       ├── auth/
-│       ├── pesquisa/          # rotas públicas: sessões, respostas, nota, manifestação do paciente
+│       ├── pesquisa/          # rotas públicas (sessões, respostas, nota, manifestação) e formulários de papel
 │       ├── setores/
 │       ├── etapas/            # etapas da jornada de cada setor
 │       ├── turnos/
@@ -254,6 +254,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `POST` | `/api/publico/sessoes` | Abre uma sessão (setor e canal) | RF02, RF13 |
 | `GET` | `/api/publico/sessoes/:id` | Situação da sessão, para retomar de onde parou | RF13 |
 | `PUT` | `/api/publico/sessoes/:id/atendimento` | Grava a data e o período informados na tela do celular (uma vez só) | RN03 |
+| `PUT` | `/api/publico/sessoes/:id/respondente` | Grava quem respondeu e o tipo de atendimento da tela "Sobre o atendimento", no celular e no tablet (uma vez só). Corpo: `{ respondente?, tipoAtendimento? }` | RF32 |
 | `POST` | `/api/publico/sessoes/:id/respostas` | Grava uma resposta ou um pulo | RF03, RF07 |
 | `PUT` | `/api/publico/sessoes/:id/nota` | Grava a nota geral | RF03, RF08 |
 | `POST` | `/api/publico/sessoes/:id/manifestacoes` | Registra a mensagem do paciente para a Ouvidoria, sem tipo (a classificar) e com telefone opcional | RF09, RF10, RN12 |
@@ -301,16 +302,18 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `PUT` | `/api/manifestacoes/:id/tipo` | SA | Classificar a manifestação ou corrigir o tipo | RF15, RN12 |
 | `POST` | `/api/manifestacoes/:id/tentativas` | SA | Registrar tentativa de contato | RF15 |
 | `POST` | `/api/manifestacoes/:id/finalizacao` | SA | Encerrar ou marcar sem retorno | RF15, RN07 |
-| `POST` | `/api/manifestacoes/:id/anexos` | SA | Anexar foto do formulário em papel | RF17 |
+| `POST` | `/api/manifestacoes/:id/anexos` | SA | Anexar foto de uma manifestação recebida por escrito | RF17 |
 | `GET` | `/api/manifestacoes/:id/anexos/:anexoId` | SA | Ver a foto | RF17 |
+| `GET` `POST` | `/api/formularios-papel` | SA | Listar e digitar formulários de pesquisa em papel (módulo `pesquisa`) | RF33, RN03 |
+| `PUT` `DELETE` | `/api/formularios-papel/:id` | SA | Corrigir ou excluir um formulário de papel digitado; o estado anterior completo vai para o log | RF33, RN01, RNF11 |
 | `GET` | `/api/indicadores` | SA, G | Todos os painéis do dashboard para os filtros escolhidos | RF27, RF28 |
 | `GET` | `/api/indicadores/equipes` | SA, G | Nota por equipe de um setor | RF28, RN04 |
 | `GET` | `/api/indicadores/respostas.xlsx` | SA, G | Exportação em Excel com os filtros aplicados | RF29 |
 | `GET` | `/api/indicadores/relatorio-mensal.pdf` | SA, G | Relatório mensal em PDF | RF29 |
 
-Os filtros do dashboard (período, setor, turno, etapa, canal) vão na *query string*: `/api/indicadores?inicio=2026-10-01&fim=2026-10-31&setorId=2`. A exportação em Excel usa os mesmos filtros, e por isso fica sob o mesmo prefixo: o módulo `indicadores` responde por tudo o que começa com `/api/indicadores`. Para um Gestor, o service sempre limita os setores aos atribuídos a ele, mesmo que a URL peça outro (RNF10).
+Os filtros do dashboard (período, setor, turno, etapa, canal — `CELULAR`, `TABLET` ou `PAPEL` —, `respondente` e `tipoAtendimento`) vão na *query string*: `/api/indicadores?inicio=2026-10-01&fim=2026-10-31&setorId=2&canal=PAPEL`. A exportação em Excel usa os mesmos filtros, e por isso fica sob o mesmo prefixo: o módulo `indicadores` responde por tudo o que começa com `/api/indicadores`. Para um Gestor, o service sempre limita os setores aos atribuídos a ele, mesmo que a URL peça outro (RNF10).
 
-Não há rotas de exclusão (`DELETE`) para dados com histórico (decisão D6 do modelo). Desde a revisão do design (29/10/2026), não há nenhuma rota `DELETE`: a única que existia retirava a aprovação de um elogio para o TV Wall, que saiu do sistema.
+Não há rotas de exclusão (`DELETE`) para dados com histórico (decisão D6 do modelo). A única exceção é `DELETE /api/formularios-papel/:id` (v1.13): ela só encontra sessões de canal `PAPEL`, para tirar um formulário digitado duas vezes, e grava antes no log a sessão e todas as respostas (D19 do modelo). Uma sessão de celular ou de tablet pedida por essa rota recebe `404`.
 
 ### 7.4 Respostas e erros
 
@@ -351,7 +354,7 @@ O RNF07 define que o dashboard e o TV Wall buscam dados novos **a cada 5 segundo
 
 A solução é um **cache em memória com controle de versão**:
 
-1. O backend mantém um contador `versaoDados`, que aumenta toda vez que algo que afeta os indicadores é gravado: resposta, nota, data do atendimento, manifestação, escala, atendimentos ou um cadastro que aparece nos painéis (setor, etapa, pergunta e as marcações do TV Wall).
+1. O backend mantém um contador `versaoDados`, que aumenta toda vez que algo que afeta os indicadores é gravado: resposta, nota, data do atendimento, quem respondeu e tipo de atendimento, manifestação, escala, atendimentos, um formulário de papel digitado, corrigido ou excluído, ou um cadastro que aparece nos painéis (setor, etapa, pergunta e as marcações do TV Wall).
 2. Cada resultado de indicador fica guardado em memória junto com a versão em que foi calculado.
 3. Em cada *polling*, se a versão não mudou, a API devolve o resultado guardado **sem recalcular os indicadores**. Se mudou, recalcula e guarda de novo.
 
@@ -386,7 +389,8 @@ O mesmo *polling* do TV Wall mantém a API ativa enquanto a TV está ligada, evi
 | **Possível duplicata** | Ao registrar uma manifestação com telefone, o service procura outra com o mesmo `telefone_hash` e setor nas últimas 24 horas | RF19 |
 | **Classificação da manifestação** | O Super Admin define o tipo (elogio, reclamação ou sugestão) e pode corrigi-lo; o tipo anterior e o novo vão para o log. O tipo nunca volta a ficar vazio | RN12, RNF11 |
 | **Finalização do chamado** | Exige o tipo definido (`422` se ainda estiver a classificar). Uma transação muda o status, grava o desfecho, apaga telefone e hash e registra o log. Se qualquer passo falhar, nada é alterado | RN07, RNF11 |
-| **Fotos de formulários** | Recebidas com multer (até 300 KB, só imagens), já reduzidas pelo frontend, e gravadas no banco | RF17 |
+| **Digitação do formulário de papel** | Uma transação cria a sessão de canal `PAPEL`, as respostas e o log. A correção e a exclusão gravam antes no log o estado anterior completo (sessão e respostas); a exclusão usa a ação `EXCLUSAO`. Sem data no papel, vale a data de recolhimento (`ESTIMADO`); sem turno, a sessão fica sem turno | RF33, RN01, RN03, RNF11 |
+| **Fotos de manifestações escritas** | Recebidas com multer (até 300 KB, só imagens), já reduzidas pelo frontend, e gravadas no banco | RF17 |
 | **Índice de satisfação** | Porcentagem de avaliações positivas, calculada no SQL com `FILTER`: notas a partir de `NOTA_POSITIVA_MINIMA` (7) e rostinhos a partir de `ROSTINHO_POSITIVO_MINIMO` (4), sobre as avaliações dadas (puladas não contam). O TV Wall só mostra setores e etapas marcados com pelo menos `TV_WALL_MINIMO_RESPOSTAS` (10) avaliações no mês, e nunca contagens | RF27, RF30, RF31, RN08 |
 
 O projeto não usa tarefas agendadas (*cron*): tudo o que depende do tempo, como o alerta de 48 horas e a expiração de sessões em 12 horas, é calculado no momento da consulta. Isso evita depender de um serviço extra e funciona mesmo com a API suspensa.

@@ -1,6 +1,6 @@
 # Sistema de Pesquisa de Satisfação — FHDOD
 
-Plataforma web de pesquisa de satisfação para a **Fundação Hospitalar Dr. Oswaldo Diesel (FHDOD)**, de Três Coroas/RS. O sistema substitui o formulário em papel da Ouvidoria por uma pesquisa respondida pelo celular ou pelo tablet do setor, com indicadores para a gestão e uma tela pública de resultados nas áreas de espera.
+Plataforma web de pesquisa de satisfação para a **Fundação Hospitalar Dr. Oswaldo Diesel (FHDOD)**, de Três Coroas/RS. O sistema leva a pesquisa ao celular e ao tablet do setor, traz para dentro dele os formulários de papel da Ouvidoria, que continuam em uso e passam a ser digitados no sistema, e oferece indicadores para a gestão e uma tela pública de resultados nas áreas de espera.
 
 Projeto Integrador 2026/2 — Curso Técnico em Informática.
 
@@ -13,7 +13,7 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | Parte | Para quem | O que faz |
 | --- | --- | --- |
 | **Pesquisa do paciente** | Pacientes e acompanhantes, sem login | Pesquisa por setor, aberta por QR Code, respondida só com toques e em menos de 1 minuto |
-| **Módulo da Ouvidoria** | Super Admin | Reúne elogios, reclamações e sugestões de todos os canais e acompanha cada retorno ao paciente |
+| **Módulo da Ouvidoria** | Super Admin | Reúne elogios, reclamações e sugestões de todos os canais, acompanha cada retorno ao paciente e digita os formulários de papel |
 | **Dashboard** | Super Admin e Gestores | Indicadores do hospital até setor, turno e equipe, com exportação em Excel e relatório mensal em PDF |
 | **TV Wall** | Áreas de espera | Satisfação do hospital em porcentagem e, quando a Ouvidoria escolher, a de setores e etapas, com o QR Code da pesquisa |
 

@@ -1,7 +1,7 @@
 # Modelo de Dados e Requisitos — Pesquisa de Satisfação FHDOD
 
 **Versão:** 1.0 — 16/10/2026
-**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md), versão 1.12
+**Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md), versão 1.13
 
 Este documento define como os dados do sistema são organizados no banco: a escolha do tipo de banco, as entidades e seus relacionamentos, o dicionário de dados, as regras de integridade e a ligação de cada tabela aos requisitos. Ele é a base do `schema.prisma`, dos scripts de criação e povoamento e da camada de repositórios do backend.
 
@@ -54,7 +54,7 @@ O modelo tem **16 tabelas**, organizadas em quatro grupos:
 | --- | --- | --- |
 | Acesso | `usuario`, `gestor_setor`, `log_auditoria` | RF20, RF26, RN10, RNF10, RNF11 |
 | Estrutura do hospital | `setor`, `turno`, `equipe`, `escala`, `atendimento_mensal` | RF20, RF21, RF25, RN04 |
-| Pesquisa | `etapa`, `pergunta`, `sessao`, `resposta` | RF01–RF13, RF22, RF23, RF31, RN01–RN03 |
+| Pesquisa | `etapa`, `pergunta`, `sessao`, `resposta` | RF01–RF13, RF22, RF23, RF31–RF33, RN01–RN03 |
 | Ouvidoria | `manifestacao`, `tentativa_contato`, `anexo_manifestacao`, `termo_privacidade` | RF09, RF10, RF14–RF17, RF19, RF24, RN05–RN07 |
 
 O TV Wall não tem tabela própria: ele lê os indicadores das tabelas da pesquisa e as marcações `exibir_tv_wall` de `setor` e `etapa` (D17).
@@ -79,7 +79,7 @@ erDiagram
     ETAPA ||--o{ PERGUNTA : "agrupa"
 
     SETOR ||--o{ SESSAO : "recebe"
-    TURNO ||--o{ SESSAO : "classifica"
+    TURNO |o--o{ SESSAO : "classifica"
     SESSAO ||--o{ RESPOSTA : "contém"
     PERGUNTA ||--o{ RESPOSTA : "é respondida em"
 
@@ -91,7 +91,7 @@ erDiagram
     USUARIO ||--o{ TENTATIVA_CONTATO : "registra"
 ```
 
-Leitura dos símbolos: `||` = exatamente um; `|o` = zero ou um; `o{` = zero ou muitos. Assim, `SETOR ||--o{ SESSAO` significa que cada sessão pertence a exatamente um setor, e um setor pode ter zero ou muitas sessões.
+Leitura dos símbolos: `||` = exatamente um; `|o` = zero ou um; `o{` = zero ou muitos. Assim, `SETOR ||--o{ SESSAO` significa que cada sessão pertence a exatamente um setor, e um setor pode ter zero ou muitas sessões. Já `TURNO |o--o{ SESSAO` indica que a sessão pode ficar sem turno: só o formulário de papel sem turno escrito (D19).
 
 ---
 
@@ -103,7 +103,9 @@ As decisões abaixo explicam as escolhas menos óbvias do modelo e o requisito q
 A nota de 0 a 10 é a única pergunta obrigatória, é a mesma em todos os setores e existe uma vez por sessão (RF03). Como coluna `sessao.nota_geral`, ela não precisa ser cadastrada como pergunta e não pode ser desativada por engano. Além disso, "resposta completa" (definição da taxa de adesão) passa a ser simplesmente `nota_geral IS NOT NULL`, e o NPS sai de uma única tabela.
 
 **D2 — Data e turno são resolvidos e gravados na sessão.**
-O objetivo 1.2 é registrar setor, data e turno em **100%** das respostas. A sessão nasce com a data e o turno calculados pela hora de abertura (`turno_origem = CALCULADO`). No celular, se o paciente informar a data e o período na tela fixa "Quando foi o seu atendimento?", os valores são substituídos pelos informados (`INFORMADO`), como define a RN03; no tablet, que fica no setor, vale sempre o cálculo. A data informada não é uma pergunta cadastrada nem uma resposta: ela vai direto para a sessão, porque é a mesma para todo o atendimento. Assim, toda sessão sempre tem os três dados, e os filtros do dashboard não precisam saber de onde veio o turno.
+O objetivo 1.2 é registrar setor, data e turno em **100%** das respostas pelo celular e pelo tablet. A sessão nasce com a data e o turno calculados pela hora de abertura (`turno_origem = CALCULADO`). No celular, se o paciente informar a data e o período na tela fixa "Quando foi o seu atendimento?", os valores são substituídos pelos informados (`INFORMADO`), como define a RN03; no tablet, que fica no setor, vale sempre o cálculo. A data informada não é uma pergunta cadastrada nem uma resposta: ela vai direto para a sessão, porque é a mesma para todo o atendimento. Assim, toda sessão de celular e de tablet sempre tem os três dados, e os filtros do dashboard não precisam saber de onde veio o turno.
+
+O formulário de papel digitado (D19) é a única exceção. Nele valem a data e o turno escritos (`INFORMADO`). Sem data, vale a data em que a Ouvidoria recolheu o formulário, com a origem `ESTIMADO`, para a exportação e os relatórios mostrarem que ela é aproximada. Sem turno, a sessão fica sem turno. Duas restrições `CHECK` garantem a regra: só o papel fica sem turno, e a origem combina com o canal (`ESTIMADO` só no papel; `CALCULADO` nunca no papel, porque a hora da digitação não diz nada sobre o atendimento).
 
 **D3 — A equipe é encontrada pela escala, não gravada na resposta.**
 A equipe de uma sessão é obtida cruzando setor, data e turno da sessão com a tabela `escala` (RN04). A escala costuma ser importada depois do início do mês (RF21). Se a equipe fosse gravada no momento da resposta, as respostas anteriores à importação ficariam sem equipe. Com o cruzamento, importar ou corrigir a escala atualiza os indicadores automaticamente.
@@ -117,7 +119,7 @@ Pular uma pergunta (RF03) grava uma resposta com `pulada = true` e sem valor. Is
 **D6 — Nada que tenha histórico é apagado.**
 Setores, turnos, etapas, equipes, usuários e perguntas são **desativados** (`ativo = false`), nunca removidos (RF20, RF23, RN09). As chaves estrangeiras usam `ON DELETE RESTRICT`, então o banco recusa qualquer exclusão que deixaria uma resposta ou manifestação órfã (RN01, RN07). "Descartar" uma sessão no tablet (RF13) significa não continuá-la: as respostas já dadas permanecem e contam nos indicadores das etapas (RF07).
 
-Só há dois casos de exclusão física, ambos em tabelas de configuração que nenhuma resposta referencia por chave estrangeira: retirar um setor de um gestor (`gestor_setor`) e substituir linhas da escala ao importar de novo um mês (`escala`).
+Há dois casos de exclusão física em tabelas de configuração que nenhuma resposta referencia por chave estrangeira: retirar um setor de um gestor (`gestor_setor`) e substituir linhas da escala ao importar de novo um mês (`escala`). O terceiro, e único com respostas, é a exclusão de um formulário de papel digitado (D19): a sessão de canal `PAPEL` e as suas respostas são apagadas juntas, com o estado completo guardado no log antes (RN01, RNF11).
 
 **D7 — O telefone é cifrado, tem um hash separado e é apagado ao finalizar.**
 O número é normalizado (apenas dígitos, com DDI e DDD) e então gravado de duas formas:
@@ -138,6 +140,8 @@ O código da sessão circula nas rotas públicas da pesquisa (RNF08). Um número
 
 **D11 — A sessão não guarda nenhum dado pessoal.**
 Não há IP, identificador de aparelho ou navegador na sessão (RNF12, coleta mínima). O aviso "Você já respondeu hoje" (RF13) é resolvido no próprio navegador: o frontend guarda o código da última sessão por setor no `localStorage` e consulta se ela tem menos de 12 horas. Como o RF13 prevê, isso vale só no celular. No tablet, que é compartilhado, o aviso apareceria para o próximo paciente, então a sessão não é guardada. Isso não contraria o RNF07, porque nenhuma resposta é guardada localmente, só o código.
+
+Quem respondeu (paciente ou familiar) e o tipo de atendimento (SUS, plano de saúde ou particular), gravados na sessão desde a v1.13 (D18), também não identificam a pessoa: são categorias amplas, opcionais e sem ligação com cadastro, nome ou prontuário. Por isso a sessão continua sem dado pessoal.
 
 **D12 — Profissionais não são cadastrados.**
 O sistema avalia equipes, não pessoas (RN04). A equipe é o grupo de plantão em um setor e turno (definição 1.3 dos requisitos), não a categoria profissional: "Enfermagem" é uma **etapa** da jornada, avaliada pelas perguntas daquela etapa, enquanto a equipe responde à pergunta "quem estava de plantão?". Ela é cadastrada pelo Super Admin (RF20), tem só um nome (ex.: "Equipe A") e pertence a um setor, porque o dashboard chega à equipe sempre a partir do setor (RF28) e porque a "Equipe A" do Pronto Atendimento e a "Equipe A" da Internação podem ser pessoas diferentes. Na pesquisa, o paciente cita um profissional, se quiser, no próprio texto da manifestação (RF09), que só a Ouvidoria lê. Nos outros canais (RF17), a Ouvidoria pode anotar o nome numa coluna própria (`profissional_citado`). Nenhum dos dois aparece em indicadores, exportações ou no TV Wall (RF28, RN08).
@@ -171,6 +175,20 @@ Na revisão do design (29/10/2026), o TV Wall passou a mostrar o **índice de sa
 
 Alternativas consideradas: uma tabela de configuração com chaves por painel (todos os setores ou nenhum), mais simples, mas que não permite escolher setores; e o painel por setor sempre visível, que expõe setores com poucas respostas.
 
+**D18 — Quem respondeu e o tipo de atendimento ficam na sessão e são opcionais.**
+O formulário de papel oficial (decisão de 30/10/2026) pergunta, no cabeçalho, se quem responde é o paciente ou um familiar e se o atendimento foi pelo SUS, por plano de saúde ou particular. O sistema passou a perguntar o mesmo (RF32), numa tela fixa, "Sobre o atendimento", no celular e no tablet, para os filtros do dashboard (RF28) funcionarem igual para o papel e para as respostas digitais. Os dois dados ficam em `sessao.respondente` e `sessao.tipo_atendimento`, porque valem para o atendimento inteiro, como a data e o turno (D2), e não para uma pergunta. São opcionais (vazio = não informado), com botão "Pular", para não alongar a pesquisa (RNF05), e não identificam a pessoa (D11).
+
+Alternativa descartada: cadastrar os dois como perguntas comuns. Elas seriam rostinhos (D4), que não servem para escolher entre categorias, e poderiam ser desativadas ou mudar de texto em cada setor, quebrando os filtros.
+
+**D19 — O formulário de papel é digitado como uma sessão de canal `PAPEL`.**
+O papel continua em uso (decisão de 30/10/2026), e a Ouvidoria digita cada formulário no sistema (RF33), para as respostas do papel entrarem nos mesmos indicadores das digitais. Cada formulário é **uma sessão** com `canal = PAPEL`, do setor que a Ouvidoria escolher entre os serviços marcados (o principal); os outros serviços marcados não são registrados. Os rostinhos do papel vão para as perguntas desse setor que correspondem aos itens do formulário, e a nota de 0 a 10, opcional no papel, vai para `nota_geral` (sem ela, a sessão fica incompleta, como a digital interrompida, RN01).
+
+Data e turno seguem o que está escrito (`INFORMADO`). Sem data, vale a data de recolhimento, com a origem `ESTIMADO` (D2). Sem turno, `turno_id` fica vazio, o que só o canal `PAPEL` pode (`ck_sessao_turno_so_papel_vazio`): inventar um turno ligaria a sessão à equipe errada pela escala (D3). A sessão sem turno entra nos indicadores do período, mas fica fora do filtro por turno e da nota por equipe (RN04).
+
+O Super Admin pode corrigir os dados e as notas de um formulário digitado, ou excluí-lo (por exemplo, quando foi digitado duas vezes), para o sistema ficar igual ao papel. Vale só para o canal `PAPEL`: as respostas de celular e tablet continuam sem alteração nem exclusão (RN01). Antes de cada correção ou exclusão, o log recebe o estado anterior completo — a sessão e todas as respostas —, com quem fez e quando (RNF11); a exclusão usa a ação `EXCLUSAO`. Assim, nada se perde, e o formulário excluído pode ser reconstruído a partir do log.
+
+Alternativas descartadas: deixar o papel fora do sistema, o que manteria a transcrição em planilhas e dois conjuntos de indicadores que não se somam; e **anular** o formulário errado em vez de excluí-lo, com uma coluna de situação, o que obrigaria toda consulta de indicador a ignorar os anulados, e um esquecimento contaria um formulário duplicado.
+
 ---
 
 ## 5. Dicionário de dados
@@ -182,13 +200,15 @@ Convenções das tabelas: **Nulo** indica se a coluna aceita valor vazio; **PK**
 | Tipo | Valores | Uso |
 | --- | --- | --- |
 | `perfil_usuario` | `SUPER_ADMIN`, `GESTOR` | Perfil de acesso (seção 2.1 dos requisitos) |
-| `canal_resposta` | `CELULAR`, `TABLET` | Canal da sessão (RF02) |
-| `origem_turno` | `INFORMADO`, `CALCULADO` | Como o turno da sessão foi obtido (RN03) |
+| `canal_resposta` | `CELULAR`, `TABLET`, `PAPEL` | Canal da sessão (RF02); `PAPEL` é o formulário de papel digitado (RF33, D19) |
+| `origem_turno` | `INFORMADO`, `CALCULADO`, `ESTIMADO` | Como a data e o turno da sessão foram obtidos (RN03, D2); `ESTIMADO` só no papel sem data (D19) |
+| `respondente` | `PACIENTE`, `FAMILIAR` | Quem respondeu (RF32, D18) |
+| `tipo_atendimento` | `SUS`, `PLANO_DE_SAUDE`, `PARTICULAR` | Tipo de atendimento (RF32, D18) |
 | `tipo_manifestacao` | `ELOGIO`, `RECLAMACAO`, `SUGESTAO` | Tipo da manifestação, definido pela Ouvidoria (RN12, D14) |
 | `origem_manifestacao` | `PESQUISA`, `TELEFONE`, `PRESENCIAL`, `EMAIL`, `PAPEL` | Canal da manifestação (RF17) |
 | `status_manifestacao` | `NOVA`, `EM_CONTATO`, `ENCERRADA`, `SEM_RETORNO` | Situação do chamado (RF15) |
 | `resultado_contato` | `CONTATO_REALIZADO`, `SEM_SUCESSO` | Resultado de cada tentativa (RF15) |
-| `acao_auditoria` | `CRIACAO`, `ALTERACAO`, `DESATIVACAO`, `ANONIMIZACAO` | Ação registrada no log (RNF11) |
+| `acao_auditoria` | `CRIACAO`, `ALTERACAO`, `DESATIVACAO`, `ANONIMIZACAO`, `EXCLUSAO` | Ação registrada no log (RNF11); `EXCLUSAO` só na exclusão de formulário de papel (D19) |
 
 ### 5.2 Acesso
 
@@ -221,7 +241,7 @@ A chave primária é composta (`usuario_id`, `setor_id`), o que impede atribuir 
 
 #### `log_auditoria`
 
-Registro das alterações em manifestações, perguntas e usuários (RNF11).
+Registro das alterações em manifestações, perguntas e usuários, e dos formulários de papel digitados, corrigidos e excluídos (RNF11, D19).
 
 | Coluna | Tipo | Nulo | Restrições | Descrição |
 | --- | --- | --- | --- | --- |
@@ -234,7 +254,7 @@ Registro das alterações em manifestações, perguntas e usuários (RNF11).
 | `dados_novos` | `JSONB` | Sim | | Estado depois da alteração |
 | `criado_em` | `TIMESTAMPTZ` | Não | padrão `now()` | Data e hora da ação |
 
-O log **nunca** recebe `telefone_cifrado`, `telefone_hash` ou `senha_hash`: a aplicação remove esses campos antes de gravar. Se não fizesse isso, o log manteria uma cópia do telefone depois que o chamado o apagou (RN07). A anonimização é registrada com a ação `ANONIMIZACAO`, sem o número.
+O log **nunca** recebe `telefone_cifrado`, `telefone_hash` ou `senha_hash`: a aplicação remove esses campos antes de gravar. Se não fizesse isso, o log manteria uma cópia do telefone depois que o chamado o apagou (RN07). A anonimização é registrada com a ação `ANONIMIZACAO`, sem o número. A exclusão de um formulário de papel é registrada com a ação `EXCLUSAO`, e `dados_anteriores` guarda a sessão e todas as respostas (D19).
 
 ### 5.3 Estrutura do hospital
 
@@ -367,21 +387,23 @@ Regras da aplicação:
 
 #### `sessao`
 
-Uma abertura da pesquisa; agrupa as respostas de um mesmo paciente (RF02, RF13).
+Uma abertura da pesquisa ou um formulário de papel digitado pela Ouvidoria; agrupa as respostas de um mesmo paciente (RF02, RF13, RF33).
 
 | Coluna | Tipo | Nulo | Restrições | Descrição |
 | --- | --- | --- | --- | --- |
 | `id` | `UUID` | Não | PK, gerado aleatoriamente | Código da sessão usado nas rotas públicas (D10) |
-| `setor_id` | `INTEGER` | Não | FK → `setor` | Setor, vindo da URL (RN02) |
-| `canal` | `canal_resposta` | Não | | Celular ou tablet (RF02) |
-| `data_atendimento` | `DATE` | Não | | Data de referência do atendimento (D2, D13) |
-| `turno_id` | `INTEGER` | Não | FK → `turno` | Turno do atendimento (D2) |
-| `turno_origem` | `origem_turno` | Não | padrão `CALCULADO` | Se a data e o turno foram informados pela tela do celular ou calculados pela hora (RN03, D2) |
+| `setor_id` | `INTEGER` | Não | FK → `setor` | Setor, vindo da URL (RN02) ou escolhido pela Ouvidoria no papel (RF33) |
+| `canal` | `canal_resposta` | Não | | Celular, tablet ou papel (RF02, RF33) |
+| `data_atendimento` | `DATE` | Não | | Data de referência do atendimento (D2, D13, D19) |
+| `turno_id` | `INTEGER` | Sim | FK → `turno`; `CHECK (turno_id IS NOT NULL OR canal = 'PAPEL')` | Turno do atendimento (D2); vazio só no papel sem turno escrito (D19) |
+| `turno_origem` | `origem_turno` | Não | padrão `CALCULADO`; `CHECK` da origem por canal (seção 6) | Se a data e o turno foram calculados pela hora, informados (tela do celular ou escritos no papel) ou estimados pela data de recolhimento do papel (RN03, D2, D19) |
+| `respondente` | `respondente` | Sim | | Paciente ou familiar; vazio = não informado (RF32, D18) |
+| `tipo_atendimento` | `tipo_atendimento` | Sim | | SUS, plano de saúde ou particular; vazio = não informado (RF32, D18) |
 | `nota_geral` | `SMALLINT` | Sim | `CHECK (nota_geral BETWEEN 0 AND 10)` | Nota geral do hospital (RF03, D1) |
-| `iniciada_em` | `TIMESTAMPTZ` | Não | padrão `now()` | Abertura da pesquisa |
+| `iniciada_em` | `TIMESTAMPTZ` | Não | padrão `now()` | Abertura da pesquisa; no papel, o momento da digitação |
 | `concluida_em` | `TIMESTAMPTZ` | Sim | `CHECK ((nota_geral IS NULL) = (concluida_em IS NULL))` | Momento em que a nota geral foi gravada |
 
-Uma sessão é **completa** quando tem `nota_geral`. A nota só é gravada uma vez (RN01), e a aplicação só aceita respostas novas em sessões abertas há menos de 12 horas, o mesmo prazo do aviso "Você já respondeu hoje" (RF13). A data e o turno informados também só são gravados uma vez, só em sessões do celular, com data não futura e turno ativo (D2).
+Uma sessão é **completa** quando tem `nota_geral`. A nota só é gravada uma vez (RN01), e a aplicação só aceita respostas novas em sessões abertas há menos de 12 horas, o mesmo prazo do aviso "Você já respondeu hoje" (RF13). A data e o turno informados também só são gravados uma vez, só em sessões do celular, com data não futura e turno ativo (D2), e o mesmo vale para quem respondeu e o tipo de atendimento, gravados uma vez pela tela "Sobre o atendimento" do celular e do tablet (RF32, D18). A sessão de papel nasce com tudo o que o formulário traz, e é a única que o Super Admin pode corrigir ou excluir (D19).
 
 #### `resposta`
 
@@ -505,7 +527,7 @@ Regras da aplicação:
 
 #### `anexo_manifestacao`
 
-Fotos de formulários em papel anexadas a uma manifestação (RF17, RN11).
+Fotos de manifestações recebidas por escrito (papel), anexadas ao registro (RF17). O formulário de pesquisa em papel não é fotografado: é digitado (RF33, D19).
 
 | Coluna | Tipo | Nulo | Restrições | Descrição |
 | --- | --- | --- | --- | --- |
@@ -533,7 +555,10 @@ As regras ficam no banco sempre que podem ser expressas em uma única tabela. As
 
 | Regra | Banco | Aplicação |
 | --- | --- | --- |
-| Respostas e perguntas nunca apagadas (RN01, RN09) | FKs com `RESTRICT` | Não existem rotas de exclusão |
+| Respostas e perguntas nunca apagadas (RN01, RN09) | FKs com `RESTRICT` | Não existem rotas de exclusão, exceto a do formulário de papel (D19) |
+| Só o papel fica sem turno; a origem da data e do turno combina com o canal (RN03, D2, D19) | `CHECK` (`ck_sessao_turno_so_papel_vazio`, `ck_sessao_origem_por_canal`) | A digitação do papel recusa data futura e pergunta de outro setor |
+| Quem respondeu e tipo de atendimento gravados uma vez (RF32, D18) | — | Atualização condicional na sessão |
+| Correção e exclusão só do formulário de papel, com o estado anterior no log (RN01, RNF11, D19) | — | As rotas do papel só encontram sessões `PAPEL`; alteração e log na mesma transação |
 | Uma resposta por pergunta por sessão (RF13) | Restrição única | — |
 | Nota geral de 0 a 10, gravada uma vez (RF03, RN01) | `CHECK` de faixa | Recusa uma segunda nota |
 | Resposta é um rostinho de 1 a 5, ou pulada sem valor (RF04, RF22) | `CHECK` | Validação na rota pública |
@@ -570,10 +595,12 @@ O Prisma não descreve restrições `CHECK` no `schema.prisma`. Elas serão acre
 | Taxa de adesão (RF25) | Sessões completas ÷ `quantidade` do mês e setor; sem atendimentos informados, exibe "atendimentos não informados" | `sessao`, `atendimento_mensal` |
 | Índice de satisfação (RF27, RF30) | % de avaliações positivas sobre as avaliações dadas: na nota geral, notas de 7 a 10 (o mesmo corte do RF08); nos rostinhos, 4 e 5. Puladas não contam (D17) | `sessao`, `resposta` |
 | Avaliação por etapa | Índice de satisfação e média dos rostinhos (1 a 5) de cada etapa, incluindo sessões incompletas (RN01) | `resposta`, `pergunta`, `etapa` |
-| Avaliação por equipe | Nota média das sessões ligadas à equipe pela escala (D3) | `sessao`, `escala`, `equipe` |
+| Avaliação por equipe | Nota média das sessões ligadas à equipe pela escala (D3); sessões de papel sem turno não entram (RN04, D19) | `sessao`, `escala`, `equipe` |
 | Manifestações por tipo | Contagem por `tipo`; as que têm `tipo` vazio formam a categoria "a classificar" (D14) | `manifestacao` |
 
 **Toda resposta válida conta na análise do hospital.** Uma sessão interrompida no meio entra no total de respostas e nos indicadores das etapas e perguntas que o paciente respondeu. Só não entra na nota média, no NPS e na distribuição das notas, porque esses indicadores são calculados a partir da própria nota geral, que ela não tem. Pela mesma razão, a taxa de adesão usa as respostas completas, como define o RF27. Sessões abertas sem nenhuma resposta não contam.
+
+**O papel conta como as respostas digitais.** As sessões de formulários de papel digitados (canal `PAPEL`, D19) entram em todos os indicadores, e o filtro de canal as separa (RF27, RF28). Uma sessão de papel sem turno entra nos indicadores do período, mas fica fora do filtro por turno e da avaliação por equipe, que depende do turno para encontrar a escala (D3, RN04).
 
 Como toda pergunta é um rostinho (RF04, D4), as etapas de todos os setores usam a mesma escala de 1 a 5, e o índice de satisfação de uma etapa é comparável ao de outra. É isso que permite o ranking de etapas do RF28 e os painéis por etapa do TV Wall (RF30) sem misturar escalas. O ranking de setores usa a nota geral das sessões de cada setor, e o índice de satisfação geral, a nota de 7 a 10.
 
@@ -638,7 +665,7 @@ Para verificar se o plano gratuito do Neon é suficiente (restrição 2.3 dos re
 | Sessões | 3.000 |
 | Respostas | 36.000 |
 | Espaço das respostas (linhas e índices, cerca de 150 bytes por resposta) | cerca de 6 MB |
-| Fotos de formulários em papel (30 fotos de cerca de 200 KB) | cerca de 6 MB |
+| Fotos de manifestações escritas (30 fotos de cerca de 200 KB) | cerca de 6 MB |
 | **Total** | **cerca de 12 MB** |
 
 Nesse cenário, o banco cresce cerca de 150 MB por ano. O limite de armazenamento do plano gratuito do Neon (0,5 GB por projeto na data deste documento; conferir no site do Neon antes da publicação) seria atingido só depois de três anos, mesmo com adesão 50 vezes maior que a atual. O espaço ocupado aparece no painel do Neon e deve ser acompanhado mensalmente; a seção 5.5 descreve a saída prevista caso as fotos passem a ocupar demais.
@@ -663,10 +690,12 @@ Nesse cenário, o banco cresce cerca de 150 MB por ano. O limite de armazenament
 | RF14 — Lista de manifestações com filtros | `manifestacao` e seus índices |
 | RF15 — Chamado com tentativas e status | `manifestacao.status`, `desfecho`, `tentativa_contato` |
 | RF16 — Alerta de 48 horas úteis | `manifestacao.pediu_retorno`, `status`, `criado_em` |
-| RF17, RN11 — Outros canais e foto do papel | `manifestacao.origem`, `registrada_por_id`, `etapa_id`, `profissional_citado`, `anexo_manifestacao` |
+| RF17 — Outros canais e foto da manifestação escrita | `manifestacao.origem`, `registrada_por_id`, `etapa_id`, `profissional_citado`, `anexo_manifestacao` |
 | RF19 — Possível duplicata | `manifestacao.telefone_hash`, `possivel_duplicata` |
 | RF20, RN10 — Setores, turnos, etapas, equipes e gestores | `setor`, `turno`, `etapa` (D15), `equipe`, `usuario`, `gestor_setor` |
 | RF31, RN08 — Setores e etapas no TV Wall | `setor.exibir_tv_wall`, `etapa.exibir_tv_wall` (D17) |
+| RF32 — Quem respondeu e tipo de atendimento | `sessao.respondente`, `tipo_atendimento` (D18) |
+| RF33, RN11 — Formulário de papel digitado, corrigido ou excluído | `sessao.canal = PAPEL`, `turno_origem = ESTIMADO`, `turno_id` vazio, `log_auditoria` com a ação `EXCLUSAO` (D19) |
 | RN13 — Nomes sem repetição por maiúsculas ou acentos | *Collation* `ignora_maiusculas_e_acentos` em `setor.nome`, `turno.nome`, `etapa.nome` e `equipe.nome` (D16) |
 | RF21, RN04 — Escala e avaliação por equipe | `equipe`, `escala` (D3, D12, D13) |
 | RF23, RN09 — Perguntas só desativadas | `pergunta.ativa`, FKs com `RESTRICT` |
@@ -674,7 +703,7 @@ Nesse cenário, o banco cresce cerca de 150 MB por ano. O limite de armazenament
 | RF25, RF27 — Taxa de adesão | `atendimento_mensal` |
 | RF26 — Login | `usuario.email`, `senha_hash`, `perfil` |
 | RF27–RF30 — Indicadores, exportação e TV Wall | Consultas da seção 7; nenhuma tabela própria |
-| RN03 — Data e turno informados ou calculados | `sessao.data_atendimento`, `turno_id`, `turno_origem` (D2) |
+| RN03 — Data e turno informados, calculados ou estimados | `sessao.data_atendimento`, `turno_id`, `turno_origem` (D2, D19) |
 | RN07, RNF12 — Finalização e anonimização | `CHECK` de finalização em `manifestacao` (D7) |
 | RN12 — Tipo definido pela Ouvidoria | `manifestacao.tipo` vazio até a classificação (D14) |
 | RNF08 — Rotas públicas protegidas por sessão | `sessao.id` como UUID (D10) |
@@ -697,6 +726,6 @@ Interpretações adotadas para fechar o modelo e a situação de cada uma:
 | 3 | Prazo para complementar | Uma sessão aceita respostas por até 12 horas depois de aberta (RF13) | Validado pela dupla |
 | 4 | Equipes | A equipe é o grupo de plantão de um setor, não a categoria profissional (D12) | Conferir com a Ouvidoria em uma planilha de escala real |
 | 5 | Turnos que atravessam a meia-noite | A madrugada pertence ao turno que começou no dia anterior (D13) | Conferir com a Ouvidoria em uma planilha de escala real |
-| 6 | Foto do formulário em papel | Se o formulário tiver campo de telefone, a foto guardaria o número mesmo depois da anonimização (RN07) | Conferir o formulário; se tiver o campo, as fotos são apagadas junto com o telefone ao finalizar o chamado |
+| 6 | Foto de papel no chamado | Se o papel fotografado trouxer um telefone, a foto guardaria o número mesmo depois da anonimização (RN07) | O formulário de pesquisa oficial (v02) não tem campo de telefone e não é fotografado: é digitado (RF33, D19). Continua aberto para as manifestações recebidas por escrito (RF17), que podem trazer um telefone: se trouxerem, as fotos são apagadas junto com o telefone ao finalizar o chamado |
 
 Os pontos 4 e 5 se resolvem ao mesmo tempo: basta pedir à Ouvidoria uma escala mensal de exemplo e verificar como as equipes são nomeadas e em que data aparece o plantão da noite. Se a escala separar equipes por categoria (uma de enfermagem, outra médica no mesmo turno), a tabela `escala` precisará indicar também a etapa, e este documento será atualizado.

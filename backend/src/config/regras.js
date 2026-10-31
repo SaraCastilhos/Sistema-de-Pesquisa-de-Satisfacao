@@ -15,7 +15,7 @@ const REGRAS = Object.freeze({
   PRAZO_PRIMEIRO_CONTATO_HORAS_UTEIS: 48,
   // Tentativas sem sucesso exigidas para finalizar como "Sem retorno" (RF15, RN07)
   TENTATIVAS_MINIMAS_SEM_RETORNO: 3,
-  // Fotos de formulários em papel por manifestação (RF17)
+  // Fotos de uma manifestação recebida por escrito (RF17)
   ANEXOS_POR_MANIFESTACAO: 3,
   // Planilha da escala mensal (RF21)
   ESCALA_TAMANHO_MAXIMO_BYTES: 2 * 1024 * 1024,

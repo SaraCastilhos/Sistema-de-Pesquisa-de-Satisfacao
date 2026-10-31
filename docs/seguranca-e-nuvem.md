@@ -213,13 +213,13 @@ Como os telefones são apagados ao final de cada chamado (RN07), normalmente há
 | Hash do telefone | `manifestacao.telefone_hash` | Aviso de possível duplicata (RF19) | Mesmo consentimento | Ninguém o lê; só é comparado | Até a finalização do chamado |
 | Texto da manifestação | `manifestacao.texto` | Tratamento pela Ouvidoria | Consentimento, ao enviar | Só o Super Admin | Mantido como registro da Ouvidoria (RN07) |
 | Profissional citado | `manifestacao.profissional_citado` | Apuração pela Ouvidoria | Legítimo interesse do hospital (inciso IX) | Só o Super Admin | Mantido com a manifestação; nunca em indicadores (RN04) |
-| Foto de formulário em papel | `anexo_manifestacao` | Comprovação do registro manual (RN11) | A mesma da manifestação | Só o Super Admin | Ver seção 9 do modelo (ponto 6) |
+| Foto de manifestação escrita | `anexo_manifestacao` | Comprovação do registro de uma manifestação recebida por escrito (RF17) | A mesma da manifestação | Só o Super Admin | Ver seção 9 do modelo (ponto 6) |
 | Nome e e-mail de usuários | `usuario` | Acesso ao sistema | Execução de contrato e legítimo interesse | Super Admin | Enquanto o usuário existir |
 | Ações dos usuários | `log_auditoria` | Responsabilização (RNF11) | Legítimo interesse | Super Admin | Mantido como registro |
 
-As respostas da pesquisa **não são dados pessoais**: a sessão não guarda nome, IP nem identificador de aparelho (D11 do modelo).
+As respostas da pesquisa **não são dados pessoais**: a sessão não guarda nome, IP nem identificador de aparelho (D11 do modelo). Quem respondeu (paciente ou familiar) e o tipo de atendimento (SUS, plano de saúde ou particular), opcionais desde a v1.13 dos requisitos, são categorias amplas e também não identificam a pessoa (RF32, D18 do modelo). O formulário de papel digitado pela Ouvidoria (RF33) segue a mesma regra: ele não tem campo de nome nem de telefone.
 
-Um ponto de atenção: o texto livre de uma manifestação pode conter dados de saúde que o paciente escreve espontaneamente (ex.: um diagnóstico). Esses são **dados sensíveis** (art. 11). Por isso o texto é visível só para o Super Admin e nunca vai ao TV Wall sem passar pela edição do D9.
+Um ponto de atenção: o texto livre de uma manifestação pode conter dados de saúde que o paciente escreve espontaneamente (ex.: um diagnóstico). Esses são **dados sensíveis** (art. 11). Por isso o texto é visível só para o Super Admin e nunca vai ao TV Wall, que não mostra manifestações (RN08).
 
 ### 8.2 Princípios aplicados
 
