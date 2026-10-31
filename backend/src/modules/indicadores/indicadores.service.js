@@ -137,6 +137,8 @@ function criarIndicadoresService({
   indicadoresRepository: repo,
   versaoDados,
   cache = criarCache(),
+  // Trocado nos testes, para conferir o limite sem gravar milhares de sessões
+  sessoesMaximas = SESSOES_MAXIMAS_NA_EXPORTACAO,
 }) {
   // Setores que o usuário pode ver com o filtro pedido. Gestor SEMPRE só os seus (RNF10).
   async function setoresPermitidos(setorId, usuario) {
@@ -362,12 +364,12 @@ function criarIndicadoresService({
   // Exportação em Excel com os mesmos filtros do dashboard (RF29). Sob demanda, sem cache.
   async function exportarExcel(consulta, usuario) {
     const filtros = await montarFiltros(consulta, usuario);
-    const linhas = await repo.listarSessoesParaExportar(filtros, SESSOES_MAXIMAS_NA_EXPORTACAO);
-    if (linhas.length > SESSOES_MAXIMAS_NA_EXPORTACAO) {
+    const linhas = await repo.listarSessoesParaExportar(filtros, sessoesMaximas);
+    if (linhas.length > sessoesMaximas) {
       throw new AppError(
         422,
         'EXPORTACAO_MUITO_GRANDE',
-        `A exportação passa de ${SESSOES_MAXIMAS_NA_EXPORTACAO} sessões. Escolha um período menor.`,
+        `A exportação passa de ${sessoesMaximas} sessões. Escolha um período menor.`,
       );
     }
     const respostas = await repo.listarRespostasParaExportar(filtros);
@@ -395,10 +397,12 @@ function criarIndicadoresService({
       { inicio: `${competencia}-01`, fim: ultimoDiaDoMes(competencia), setorId },
       usuario,
     );
+    // O nome vem do cadastro, não da tabela por setor, para o título nunca depender dela
+    const nomeDoSetor = setorId ? (await repo.listarSetores([setorId]))[0]?.nome : null;
     const arquivo = await gerarRelatorio({
       competencia,
       dados,
-      nomeDoSetor: setorId ? dados.setores[0]?.nome : null,
+      nomeDoSetor,
     });
     return { nome: `relatorio-${competencia}.pdf`, arquivo };
   }
