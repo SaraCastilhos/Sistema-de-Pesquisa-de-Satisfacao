@@ -1,5 +1,87 @@
 # Contrato das rotas do módulo tvwall, juntado aos demais por src/docs/swagger.js
 tags:
   - name: TV Wall
-    description: Dados públicos do TV Wall
-paths: {}
+    description: Dados públicos do TV Wall (RF30, RF31)
+paths:
+  /api/publico/tv-wall:
+    get:
+      tags: [TV Wall]
+      summary: Dados do TV Wall (público, sem login)
+      description: >
+        Dados do mês atual, do hospital inteiro e de todos os canais, inclusive o papel digitado.
+        Todos os números são porcentagens inteiras de 0 a 100, nunca contagens (RN08). Índice de
+        satisfação = % de avaliações positivas: nota geral de 7 a 10; nos rostinhos, 4 e 5; os pulos
+        não contam. Setores e etapas só aparecem quando marcados pelo Super Admin (RF31), ativos e
+        com pelo menos 10 avaliações no mês. O geral e a evolução aparecem sempre. Nunca
+        devolve contagens, turno, equipe, manifestações, nomes de pessoas ou telefones. A rota não
+        recebe setor: o QR Code de cada área de espera é montado no frontend, a partir do endereço
+        da TV (/tv-wall/:slug). Sem dado novo, a resposta vem do cache, sem consultar o banco
+        (RNF07). Limite de 300 leituras por minuto por IP.
+      parameters: []
+      responses:
+        '200':
+          description: Painéis do TV Wall
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TvWall'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+components:
+  schemas:
+    TvWall:
+      type: object
+      required: [mes, satisfacaoGeral, adesao, evolucao, setores, etapas, paineis]
+      properties:
+        mes: { type: string, description: Mês atual, AAAA-MM, examples: ['2026-10'] }
+        satisfacaoGeral:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: '% de notas de 7 a 10 no mês; null sem nenhuma nota'
+        adesao:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 100
+          description: >
+            Respostas completas ÷ atendimentos informados no mês, em %, só com os setores que têm
+            atendimentos informados (proporcional aos dias já passados); null se nenhum tiver
+        evolucao:
+          type: array
+          description: Os últimos 6 meses, do mais antigo ao atual
+          items:
+            type: object
+            properties:
+              mes: { type: string, examples: ['2026-10'] }
+              indice:
+                type: [integer, 'null']
+                description: null no mês sem nenhuma nota
+        setores:
+          type: array
+          description: Setores marcados, do maior índice para o menor
+          items:
+            type: object
+            properties:
+              nome: { type: string, examples: [Pronto Atendimento] }
+              indice: { type: integer, minimum: 0, maximum: 100 }
+        etapas:
+          type: array
+          description: Etapas marcadas (índice dos rostinhos), do maior índice para o menor
+          items:
+            type: object
+            properties:
+              setor: { type: string, examples: [Pronto Atendimento] }
+              etapa: { type: string, examples: [Recepção] }
+              indice: { type: integer, minimum: 0, maximum: 100 }
+        paineis:
+          type: object
+          description: >
+            Painéis que entram no rodízio. O geral e a evolução, sempre;
+            setores e etapas, só com pelo menos um item. O do QR Code é decidido pelo frontend.
+          properties:
+            satisfacaoGeral: { type: boolean }
+            evolucao: { type: boolean }
+            setores: { type: boolean }
+            etapas: { type: boolean }
