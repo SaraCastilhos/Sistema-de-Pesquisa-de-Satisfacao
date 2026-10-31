@@ -252,3 +252,66 @@ describe('indicadoresService', () => {
     expect(setores[0]).toMatchObject({ notaMedia: 7.3, variacaoNotaMedia: 0.2 });
   });
 });
+
+describe('exportação em Excel', () => {
+  it('acima do limite de sessões = 422 EXPORTACAO_MUITO_GRANDE, sem ler as respostas', async () => {
+    const repo = {
+      listarSetores: jest.fn().mockResolvedValue([{ id: 10, nome: 'PA', ativo: true }]),
+      // O repository devolve uma linha a mais que o limite quando ele é ultrapassado
+      listarSessoesParaExportar: jest.fn(async (_, limite) =>
+        Array.from({ length: limite + 1 }, (__, i) => ({ id: `s${i}` })),
+      ),
+      listarRespostasParaExportar: jest.fn(),
+    };
+    const service = criarIndicadoresService({
+      indicadoresRepository: repo,
+      versaoDados: { atual: () => 1 },
+      sessoesMaximas: 2,
+    });
+    await expect(
+      service.exportarExcel(
+        { inicio: '2026-10-01', fim: '2026-10-31' },
+        { perfil: 'SUPER_ADMIN', setorIds: [] },
+      ),
+    ).rejects.toMatchObject({ status: 422, codigo: 'EXPORTACAO_MUITO_GRANDE' });
+    expect(repo.listarSessoesParaExportar).toHaveBeenCalledWith(expect.anything(), 2);
+    expect(repo.listarRespostasParaExportar).not.toHaveBeenCalled();
+  });
+});
+
+describe('relatório mensal', () => {
+  it('título com o nome do setor do cadastro, mesmo sem respostas no mês', async () => {
+    const gerarRelatorio = jest.fn().mockResolvedValue(Buffer.from('%PDF-'));
+    let criar;
+    jest.isolateModules(() => {
+      jest.doMock('../../src/modules/indicadores/indicadores.pdf', () => ({ gerarRelatorio }));
+      ({
+        criarIndicadoresService: criar,
+      } = require('../../src/modules/indicadores/indicadores.service'));
+    });
+    const vazio = jest.fn().mockResolvedValue([]);
+    const service = criar({
+      indicadoresRepository: {
+        listarSetores: jest
+          .fn()
+          .mockResolvedValue([{ id: 10, nome: 'Pronto Atendimento', ativo: true }]),
+        listarEtapasAtivas: vazio,
+        agregarSessoes: vazio,
+        distribuirNotas: vazio,
+        agregarEtapas: vazio,
+        contarCompletasPorMes: vazio,
+        listarAtendimentos: vazio,
+        contarManifestacoes: vazio,
+      },
+      versaoDados: { atual: () => 1 },
+    });
+    const { nome } = await service.relatorioMensal(
+      { competencia: '2026-10', setorId: 10 },
+      { perfil: 'SUPER_ADMIN', setorIds: [] },
+    );
+    expect(nome).toBe('relatorio-2026-10.pdf');
+    expect(gerarRelatorio).toHaveBeenCalledWith(
+      expect.objectContaining({ competencia: '2026-10', nomeDoSetor: 'Pronto Atendimento' }),
+    );
+  });
+});
