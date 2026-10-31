@@ -113,8 +113,10 @@ paths:
                 $ref: '#/components/schemas/Erro'
         '422':
           description: >
-            Linhas com erro (ESCALA_COM_ERROS, com linha e motivo de cada uma nos detalhes), planilha
-            sem linhas (PLANILHA_VAZIA) ou fora do modelo (PLANILHA_FORA_DO_MODELO). Nada é gravado.
+            Linhas com erro (ESCALA_COM_ERROS, com linha e motivo de cada uma nos detalhes, até 100
+            problemas mais um aviso de quantos faltaram), planilha sem linhas (PLANILHA_VAZIA), com
+            mais de 5.000 linhas (PLANILHA_GRANDE_DEMAIS) ou fora do modelo (PLANILHA_FORA_DO_MODELO).
+            Nada é gravado.
           content:
             application/json:
               schema:
@@ -122,7 +124,7 @@ paths:
               example:
                 erro:
                   codigo: ESCALA_COM_ERROS
-                  mensagem: A planilha tem linhas a corrigir. Nada foi gravado.
+                  mensagem: A planilha tem 1 problema a corrigir. Nada foi gravado.
                   detalhes:
                     - campo: arquivo
                       linha: 3
