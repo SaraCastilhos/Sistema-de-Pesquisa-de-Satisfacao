@@ -2,7 +2,7 @@
 tags:
   - name: Pesquisa
     description: >
-      Pesquisa pública do paciente, sem login (RF01–RF08, RF13, RF32). Leituras com até 300
+      Pesquisa pública do paciente, sem login (RF01–RF10, RF13, RF32). Leituras com até 300
       consultas por minuto por IP; gravações com até 60 envios por minuto por IP (RNF08).
 paths:
   /api/publico/pesquisas/{slug}:
@@ -332,6 +332,92 @@ paths:
                 $ref: '#/components/schemas/Erro'
         '429':
           $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/termos:
+    get:
+      tags: [Pesquisa]
+      summary: Texto vigente dos termos de privacidade
+      description: >
+        A versão de maior número (D8), aberta pelo link da caixa de autorização da manifestação
+        (RF10, RF24). O id devolvido é o termoId que a manifestação com telefone precisa enviar.
+      responses:
+        '200':
+          description: Termos vigentes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesquisaTermoVigente'
+        '404':
+          description: Nenhuma versão publicada (TERMOS_INDISPONIVEIS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/sessoes/{id}/manifestacoes:
+    post:
+      tags: [Pesquisa]
+      summary: Registra a manifestação do paciente (elogio, reclamação ou sugestão)
+      description: >
+        O paciente escreve sem classificar e sem indicar etapa ou profissional: quem quiser citar
+        alguém cita no texto (RF09). A manifestação nasce com status NOVA e sem tipo, "a
+        classificar" pela Ouvidoria (RN12); setor, data e turno vêm da sessão. O texto tem as tags
+        HTML removidas (RNF09). Sem telefone, ela é anônima. O telefone só é aceito com
+        aceiteTermos = true e o termoId da versão vigente (RN06): é gravado cifrado (AES-256-GCM),
+        com um hash HMAC para comparação (RNF10). Telefone sem aceite é recusado com 400 e nada é
+        gravado. Mesmo telefone e setor nas últimas 24 horas marca a possível duplicata, sem
+        bloquear (RF19). A resposta nunca traz o telefone nem o hash.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID), devolvido na abertura
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PesquisaManifestacaoEntrada'
+            examples:
+              anonima:
+                summary: Anônima, só com o texto
+                value: { texto: Esperei muito tempo na recepção. }
+              comRetorno:
+                summary: Com telefone para retorno e aceite dos termos
+                value:
+                  texto: Gostaria de falar sobre o atendimento.
+                  telefone: (51) 99999-9999
+                  aceiteTermos: true
+                  termoId: 1
+              soRetorno:
+                summary: Só o pedido de retorno, sem texto
+                value: { telefone: '51999999999', aceiteTermos: true, termoId: 1 }
+      responses:
+        '201':
+          description: Manifestação registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesquisaManifestacaoCriada'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Sessão inexistente ou de formulário de papel (SESSAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: >
+            Termos aceitos não são os vigentes (TERMO_DESATUALIZADO) ou sessão expirada
+            (SESSAO_EXPIRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
 components:
   schemas:
     PesquisaDoSetor:
@@ -438,3 +524,33 @@ components:
       required: [nota]
       properties:
         nota: { type: integer, minimum: 0, maximum: 10 }
+    PesquisaTermoVigente:
+      type: object
+      required: [id, versao, texto]
+      properties:
+        id: { type: integer }
+        versao: { type: integer, examples: [1] }
+        texto: { type: string }
+    PesquisaManifestacaoEntrada:
+      type: object
+      additionalProperties: false
+      description: >
+        Texto, telefone ou os dois. Com telefone, aceiteTermos = true e termoId são obrigatórios.
+        Não existem os campos tipo, etapaId e profissionalCitado.
+      properties:
+        texto:
+          type: string
+          maxLength: 2000
+          description: Sem HTML; vazio conta como não enviado
+        telefone:
+          type: string
+          maxLength: 30
+          description: 'DDD e número, com ou sem o 55 e a pontuação, como (51) 99999-9999'
+        aceiteTermos: { type: boolean }
+        termoId: { type: integer, minimum: 1, description: id de GET /api/publico/termos }
+    PesquisaManifestacaoCriada:
+      type: object
+      required: [id, protocolo]
+      properties:
+        id: { type: integer }
+        protocolo: { type: integer, description: Número de protocolo (o próprio id) }

@@ -1,6 +1,8 @@
 const { AppError } = require('../../utils/AppError');
 const { REGRAS } = require('../../config/regras');
 const { classificar } = require('../../utils/turnos');
+const { normalizar } = require('../../utils/telefone');
+const { cifrar, hmac } = require('../../utils/cripto');
 const { horaLocal, paraDataBanco, deDataBanco, deHoraBanco } = require('../../utils/datas');
 
 const HORA_MS = 60 * 60 * 1000;
@@ -241,6 +243,71 @@ function criarPesquisaService({ pesquisaRepository: repo, versaoDados, agora = (
     return { nota };
   }
 
+  // Termos de privacidade que o paciente aceita ao deixar o telefone (RF24, D8)
+  async function buscarTermoVigente() {
+    const termo = await repo.buscarTermoVigente();
+    if (!termo) {
+      throw new AppError(
+        404,
+        'TERMOS_INDISPONIVEIS',
+        'Os termos de privacidade ainda não foram publicados.',
+      );
+    }
+    return termo;
+  }
+
+  // Manifestação do paciente (RF09, RF10, RN05, RN06). O schema já garantiu que o telefone
+  // vem com o aceite e a versão dos termos, e que há texto ou telefone. O paciente não
+  // classifica: a manifestação nasce sem tipo, "a classificar" pela Ouvidoria (RN12, D14).
+  async function registrarManifestacao({ id }, { texto, telefone, termoId }) {
+    const sessao = await buscarSessaoAberta(id);
+    if (expirou(sessao)) throw sessaoExpirada();
+
+    // Setor, data e turno vêm da sessão; etapa e profissional ficam vazios (RF09, D12)
+    const dados = {
+      sessaoId: id,
+      setorId: sessao.setorId,
+      dataOcorrencia: sessao.dataAtendimento,
+      turnoId: sessao.turnoId,
+      texto: texto || null,
+    };
+
+    if (telefone !== undefined) {
+      // Normalizado antes da cifra e do hash: o mesmo número escrito de dois jeitos dá o mesmo
+      // hash (D7, CT35). Número inválido = 400 TELEFONE_INVALIDO.
+      const numero = normalizar(telefone);
+      const vigente = await repo.buscarTermoVigente();
+      if (!vigente || vigente.id !== termoId) {
+        throw new AppError(
+          409,
+          'TERMO_DESATUALIZADO',
+          'Os termos de privacidade mudaram. Leia a versão atual e aceite de novo.',
+        );
+      }
+      const momento = agora();
+      const telefoneHash = hmac(numero);
+      // Só um aviso: a manifestação é gravada de qualquer forma (RF19)
+      const possivelDuplicata = await repo.existeDuplicata({
+        telefoneHash,
+        setorId: sessao.setorId,
+        desde: new Date(momento.getTime() - REGRAS.JANELA_DUPLICATA_HORAS * HORA_MS),
+      });
+      Object.assign(dados, {
+        telefoneCifrado: cifrar(numero),
+        telefoneHash,
+        pediuRetorno: true,
+        termoPrivacidadeId: vigente.id,
+        consentimentoEm: momento,
+        possivelDuplicata,
+      });
+    }
+
+    const manifestacao = await repo.criarManifestacao(dados);
+    versaoDados.incrementar();
+    // Nunca devolve o telefone nem o hash (RNF10). O id é também o número de protocolo.
+    return { id: manifestacao.id, protocolo: manifestacao.id };
+  }
+
   return {
     carregarPesquisa,
     abrirSessao,
@@ -249,6 +316,8 @@ function criarPesquisaService({ pesquisaRepository: repo, versaoDados, agora = (
     informarRespondente,
     registrarResposta,
     registrarNota,
+    buscarTermoVigente,
+    registrarManifestacao,
   };
 }
 

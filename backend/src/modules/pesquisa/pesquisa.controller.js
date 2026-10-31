@@ -31,6 +31,16 @@ function criarPesquisaController({ pesquisaService }) {
     res.json(await pesquisaService.registrarNota(req.validado.params, req.validado.body));
   }
 
+  async function termoVigente(req, res) {
+    res.json(await pesquisaService.buscarTermoVigente());
+  }
+
+  async function registrarManifestacao(req, res) {
+    res
+      .status(201)
+      .json(await pesquisaService.registrarManifestacao(req.validado.params, req.validado.body));
+  }
+
   return {
     carregar,
     abrir,
@@ -39,6 +49,8 @@ function criarPesquisaController({ pesquisaService }) {
     informarRespondente,
     registrarResposta,
     registrarNota,
+    termoVigente,
+    registrarManifestacao,
   };
 }
 

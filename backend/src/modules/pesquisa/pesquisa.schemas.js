@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const { paraDataBanco } = require('../../utils/datas');
+const { sanitizar } = require('../../utils/sanitizar');
 
 // Esquemas das entradas, usados pelo middleware validar. Campos que não estão aqui são recusados
 // com 400 (o validar torna todo z.object estrito). As rotas são públicas: tudo o que chega é
@@ -82,6 +83,57 @@ const registrarNota = {
   body: z.object({ nota: z.number().int().min(0).max(10) }),
 };
 
+// Texto vigente dos termos de privacidade (RF24): sem parâmetros
+const termoVigente = { query: z.object({}) };
+
+// Manifestação do paciente (RF09, RF10). Sem tipo, sem etapa e sem profissional: quem
+// classifica é a Ouvidoria (RN12), e quem quiser citar alguém cita no texto. Esses campos,
+// como qualquer outro fora daqui, são recusados com 400 (CT64, CT77).
+const registrarManifestacao = {
+  params,
+  body: z
+    .object({
+      // Sem HTML (RNF09). O texto que só tinha tags ou espaços fica vazio e conta como não
+      // enviado. Os 2.000 caracteres são os da restrição ck_manifestacao_texto_tamanho.
+      texto: z
+        .string()
+        .transform(sanitizar)
+        .pipe(z.string().max(2000, 'A mensagem pode ter até 2.000 caracteres.'))
+        .optional(),
+      // O formato é conferido no service (utils/telefone.js), que já devolve o número normalizado.
+      // O máximo é um limite técnico, para não aceitar textos enormes.
+      telefone: z.string().max(30).optional(),
+      aceiteTermos: z.boolean().optional(),
+      termoId: id.optional(),
+    })
+    .superRefine((corpo, ctx) => {
+      // RN06: telefone só com o aceite dos termos. Sem aceite, nada é gravado (CT16): quem
+      // descarta o telefone é a tela (RF10), não a API.
+      if (corpo.telefone !== undefined && corpo.aceiteTermos !== true) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['aceiteTermos'],
+          message: 'Para deixar o telefone, é preciso aceitar os termos de privacidade.',
+        });
+      }
+      if (corpo.telefone !== undefined && corpo.termoId === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['termoId'],
+          message: 'Informe a versão dos termos de privacidade que foi aceita.',
+        });
+      }
+      // Mensagem vazia só é aceita quando o paciente pede retorno (ck_manifestacao_texto_ou_retorno)
+      if (!corpo.texto && corpo.telefone === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['texto'],
+          message: 'Escreva a mensagem ou deixe um telefone para retorno.',
+        });
+      }
+    }),
+};
+
 module.exports = {
   carregar,
   abrir,
@@ -90,4 +142,6 @@ module.exports = {
   informarRespondente,
   registrarResposta,
   registrarNota,
+  termoVigente,
+  registrarManifestacao,
 };

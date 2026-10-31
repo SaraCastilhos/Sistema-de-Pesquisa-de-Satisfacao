@@ -47,5 +47,12 @@ router.put(
   validar(schemas.registrarNota),
   controller.registrarNota,
 );
+router.get('/termos', limiteLeituras, validar(schemas.termoVigente), controller.termoVigente);
+router.post(
+  '/sessoes/:id/manifestacoes',
+  limiteEnvios,
+  validar(schemas.registrarManifestacao),
+  controller.registrarManifestacao,
+);
 
 module.exports = router;
