@@ -12,7 +12,7 @@ paths:
         Todos os números são porcentagens inteiras de 0 a 100, nunca contagens (RN08). Índice de
         satisfação = % de avaliações positivas: nota geral de 7 a 10; nos rostinhos, 4 e 5; os pulos
         não contam. Setores e etapas só aparecem quando marcados pelo Super Admin (RF31), ativos e
-        com pelo menos 10 avaliações no mês. O geral e a evolução aparecem sempre. Nunca
+        com pelo menos 10 avaliações no mês. O geral e a evolução não têm mínimo. Nunca
         devolve contagens, turno, equipe, manifestações, nomes de pessoas ou telefones. A rota não
         recebe setor: o QR Code de cada área de espera é montado no frontend, a partir do endereço
         da TV (/tv-wall/:slug). Sem dado novo, a resposta vem do cache, sem consultar o banco
@@ -78,7 +78,7 @@ components:
         paineis:
           type: object
           description: >
-            Painéis que entram no rodízio. O geral e a evolução, sempre;
+            Painéis que entram no rodízio: o geral com pelo menos uma avaliação no mês; a evolução com pelo menos um mês com índice;
             setores e etapas, só com pelo menos um item. O do QR Code é decidido pelo frontend.
           properties:
             satisfacaoGeral: { type: boolean }

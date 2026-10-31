@@ -87,19 +87,21 @@ function criarTvWallService({
 
     const linhaDoMes = new Map(porMes.map((linha) => [linha.grupo, linha]));
     const satisfacaoGeral = indiceGeral(geral);
+    const evolucao = meses.map((m) => ({ mes: m, indice: indiceGeral(linhaDoMes.get(m)) }));
 
     return {
       mes,
       satisfacaoGeral,
       adesao: adesao === null ? null : Math.min(100, Math.round(adesao)),
-      evolucao: meses.map((m) => ({ mes: m, indice: indiceGeral(linhaDoMes.get(m)) })),
+      evolucao,
       setores,
       etapas: etapasNoPainel,
-      // Painéis do rodízio: o geral e a evolução sempre (RF30, D17); setores e etapas só com pelo
-      // menos um item. O painel do QR Code é decidido pelo frontend (RF30).
+      // Painéis do rodízio, sem mínimo para o geral e a evolução (RF30, D17): o geral com pelo
+      // menos uma avaliação no mês; a evolução com pelo menos um mês com índice; setores e etapas
+      // com pelo menos um item. O painel do QR Code é decidido pelo frontend (RF30).
       paineis: {
-        satisfacaoGeral: true,
-        evolucao: true,
+        satisfacaoGeral: satisfacaoGeral !== null,
+        evolucao: evolucao.some((item) => item.indice !== null),
         setores: setores.length > 0,
         etapas: etapasNoPainel.length > 0,
       },

@@ -93,9 +93,11 @@ describe('tvWallService.dados', () => {
     ]);
   });
 
-  it('o geral e a evolução aparecem sempre, mesmo com poucas avaliações (RF30)', async () => {
+  it('CT88 - o geral e a evolução entram mesmo com menos do que o mínimo (RF30)', async () => {
     const { service, indicadoresRepository } = montar();
-    indicadoresRepository.agregarSessoes.mockResolvedValue([linha(null, 9, 9)]);
+    indicadoresRepository.agregarSessoes.mockImplementation(async (filtros, agrupamento) =>
+      agrupamento === 'mes' ? [linha('2026-10', 9, 9)] : [linha(null, 9, 9)],
+    );
     indicadoresRepository.agregarEtapas.mockResolvedValue([]);
     const dados = await service.dados();
     expect(dados.satisfacaoGeral).toBe(100);
@@ -105,6 +107,17 @@ describe('tvWallService.dados', () => {
       setores: false,
       etapas: false,
     });
+  });
+
+  it('sem avaliações no mês: geral fora; evolução entra se outro mês tiver índice', async () => {
+    const { service, indicadoresRepository } = montar();
+    indicadoresRepository.agregarSessoes.mockImplementation(async (filtros, agrupamento) =>
+      agrupamento === 'mes' ? [linha('2026-08', 3, 2)] : [],
+    );
+    indicadoresRepository.agregarEtapas.mockResolvedValue([]);
+    const dados = await service.dados();
+    expect(dados.satisfacaoGeral).toBeNull();
+    expect(dados.paineis).toMatchObject({ satisfacaoGeral: false, evolucao: true });
   });
 
   it('adesão inteira, proporcional aos dias do mês, e nunca acima de 100', async () => {

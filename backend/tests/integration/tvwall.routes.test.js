@@ -186,12 +186,12 @@ describe('GET /api/publico/tv-wall', () => {
     expect(body.etapas).toEqual([]);
   });
 
-  it('banco sem respostas no mês: números null; geral e evolução continuam no rodízio', async () => {
+  it('CT88 - sem nenhuma avaliação, a satisfação geral vem null e fica fora do rodízio', async () => {
     await limparBanco();
     versaoDados.incrementar();
     const { body } = await tvWall().expect(200);
     expect(body).toMatchObject({ satisfacaoGeral: null, adesao: null, setores: [], etapas: [] });
-    expect(Object.values(body.paineis)).toEqual([true, true, false, false]);
+    expect(Object.values(body.paineis)).toEqual([false, false, false, false]);
   });
 
   it('CT59 - várias leituras sem dado novo vêm do cache, sem consultar o banco', async () => {
