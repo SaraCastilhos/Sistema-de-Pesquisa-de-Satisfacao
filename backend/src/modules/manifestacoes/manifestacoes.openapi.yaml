@@ -2,4 +2,276 @@
 tags:
   - name: Ouvidoria
     description: Manifestações, tentativas de contato, finalização, anexos e TV Wall
-paths: {}
+paths:
+  /api/manifestacoes:
+    get:
+      tags: [Ouvidoria]
+      summary: Lista as manifestações com filtros (só Super Admin)
+      description: >
+        Lista paginada, da manifestação mais nova para a mais antiga (RF14). Cada item mostra o
+        protocolo, a origem, o tipo (null = a classificar), o setor, a etapa, a data, o turno, a nota
+        da sessão, o status, se o paciente pediu retorno, se é possível duplicata e o número de
+        tentativas de contato. O texto do relato e o telefone NÃO aparecem na lista: só no detalhe do
+        chamado (RNF10). A resposta também traz totalNovas, o número de chamados com status NOVA em
+        todo o sistema (sem os filtros), para o número do menu lateral.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: tamanho
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [NOVA, EM_CONTATO, ENCERRADA, SEM_RETORNO]
+        - name: tipo
+          in: query
+          required: false
+          description: A_CLASSIFICAR traz só as manifestações que ainda não têm tipo (RN12).
+          schema:
+            type: string
+            enum: [ELOGIO, RECLAMACAO, SUGESTAO, A_CLASSIFICAR]
+        - name: setorId
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: turnoId
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: inicio
+          in: query
+          required: false
+          description: Primeiro dia do período, pela data da ocorrência (incluído)
+          schema: { type: string, format: date, examples: ['2026-10-01'] }
+        - name: fim
+          in: query
+          required: false
+          description: Último dia do período, pela data da ocorrência (incluído)
+          schema: { type: string, format: date, examples: ['2026-10-31'] }
+        - name: protocolo
+          in: query
+          required: false
+          description: Número de protocolo exato (o id da manifestação)
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Página de manifestações
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestacaoPagina'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+  /api/manifestacoes/alertas:
+    get:
+      tags: [Ouvidoria]
+      summary: Pedidos de retorno sem contato há mais de 48 horas úteis (só Super Admin)
+      description: >
+        Manifestações em que o paciente pediu retorno, ainda com status NOVA (nenhuma tentativa de
+        contato) e criadas há mais de 48 horas úteis (RF16). Contam as 24 horas de cada dia de
+        segunda a sexta, no horário de Brasília; feriados não são descontados. Calculado na hora da
+        consulta, da mais antiga para a mais nova. Não traz o texto nem o telefone.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Chamados atrasados (lista vazia se nenhum)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ManifestacaoAlerta'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+  /api/manifestacoes/{id}:
+    get:
+      tags: [Ouvidoria]
+      summary: Detalhe de um chamado, com o telefone decifrado (só Super Admin)
+      description: >
+        Única rota em que o telefone do paciente aparece, decifrado (RNF10). Traz também o texto do
+        relato, o profissional citado (só nas manifestações de outros canais), as tentativas de
+        contato com o nome de quem registrou e os anexos (só os metadados; a foto é vista em
+        /api/manifestacoes/{id}/anexos/{anexoId}). Num chamado finalizado o telefone já foi apagado
+        (RN07) e vem null.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Número de protocolo
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Chamado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestacaoDetalhe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Manifestação não encontrada (MANIFESTACAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    ManifestacaoReferencia:
+      type: object
+      required: [id, nome]
+      properties:
+        id: { type: integer, examples: [1] }
+        nome: { type: string, examples: [Pronto Atendimento] }
+    ManifestacaoItem:
+      type: object
+      required:
+        - id
+        - protocolo
+        - origem
+        - tipo
+        - status
+        - dataOcorrencia
+        - pediuRetorno
+        - possivelDuplicata
+        - criadoEm
+        - setor
+        - etapa
+        - turno
+        - notaGeral
+        - tentativasContato
+      properties:
+        id: { type: integer, examples: [42] }
+        protocolo: { type: integer, description: O próprio id, examples: [42] }
+        origem: { type: string, enum: [PESQUISA, TELEFONE, PRESENCIAL, EMAIL, PAPEL] }
+        tipo:
+          type: [string, 'null']
+          enum: [ELOGIO, RECLAMACAO, SUGESTAO, null]
+          description: null = a classificar pela Ouvidoria (RN12)
+        status: { type: string, enum: [NOVA, EM_CONTATO, ENCERRADA, SEM_RETORNO] }
+        dataOcorrencia: { type: string, format: date, examples: ['2026-10-30'] }
+        pediuRetorno: { type: boolean }
+        possivelDuplicata:
+          type: boolean
+          description: Mesmo telefone e setor em 24 horas (RF19); só um aviso
+        criadoEm: { type: string, format: date-time }
+        setor:
+          $ref: '#/components/schemas/ManifestacaoReferencia'
+        etapa:
+          oneOf:
+            - $ref: '#/components/schemas/ManifestacaoReferencia'
+            - type: 'null'
+        turno:
+          oneOf:
+            - $ref: '#/components/schemas/ManifestacaoReferencia'
+            - type: 'null'
+        notaGeral:
+          type: [integer, 'null']
+          description: Nota geral da sessão (0 a 10); null fora da pesquisa ou sem nota
+        tentativasContato: { type: integer, examples: [0] }
+    ManifestacaoPagina:
+      type: object
+      required: [itens, total, pagina, tamanho, totalNovas]
+      properties:
+        itens:
+          type: array
+          items:
+            $ref: '#/components/schemas/ManifestacaoItem'
+        total: { type: integer }
+        pagina: { type: integer }
+        tamanho: { type: integer }
+        totalNovas:
+          type: integer
+          description: Chamados NOVA em todo o sistema, sem os filtros (menu lateral)
+    ManifestacaoAlerta:
+      allOf:
+        - $ref: '#/components/schemas/ManifestacaoItem'
+        - type: object
+          required: [horasUteisSemContato]
+          properties:
+            horasUteisSemContato: { type: integer, examples: [52] }
+    ManifestacaoDetalhe:
+      allOf:
+        - $ref: '#/components/schemas/ManifestacaoItem'
+        - type: object
+          required:
+            - texto
+            - telefone
+            - profissionalCitado
+            - consentimentoEm
+            - termoPrivacidade
+            - registradaPor
+            - desfecho
+            - finalizadaEm
+            - atualizadoEm
+            - tentativas
+            - anexos
+          properties:
+            texto: { type: [string, 'null'] }
+            telefone:
+              type: [string, 'null']
+              description: Decifrado, só dígitos (55 + DDD + número); null sem pedido de retorno ou depois da finalização
+              examples: ['5551999999999']
+            profissionalCitado: { type: [string, 'null'] }
+            consentimentoEm: { type: [string, 'null'], format: date-time }
+            termoPrivacidade:
+              description: Versão dos termos aceita junto com o telefone
+              oneOf:
+                - type: object
+                  required: [id, versao]
+                  properties:
+                    id: { type: integer }
+                    versao: { type: integer }
+                - type: 'null'
+            registradaPor:
+              description: Quem registrou uma manifestação de outro canal; null na pesquisa
+              oneOf:
+                - $ref: '#/components/schemas/ManifestacaoReferencia'
+                - type: 'null'
+            desfecho: { type: [string, 'null'] }
+            finalizadaEm: { type: [string, 'null'], format: date-time }
+            atualizadoEm: { type: string, format: date-time }
+            tentativas:
+              type: array
+              items:
+                type: object
+                required: [id, realizadaEm, resultado, observacao, usuario]
+                properties:
+                  id: { type: integer }
+                  realizadaEm: { type: string, format: date-time }
+                  resultado: { type: string, enum: [CONTATO_REALIZADO, SEM_SUCESSO] }
+                  observacao: { type: [string, 'null'] }
+                  usuario:
+                    $ref: '#/components/schemas/ManifestacaoReferencia'
+            anexos:
+              type: array
+              items:
+                type: object
+                required: [id, tipoMime, tamanhoBytes, criadoEm, enviadoPor]
+                properties:
+                  id: { type: integer }
+                  tipoMime: { type: string, examples: [image/jpeg] }
+                  tamanhoBytes: { type: integer }
+                  criadoEm: { type: string, format: date-time }
+                  enviadoPor:
+                    $ref: '#/components/schemas/ManifestacaoReferencia'
