@@ -3,6 +3,7 @@ const {
   perguntaDisponivel,
 } = require('../../src/modules/pesquisa/pesquisa.service');
 const { momentoLocal, paraDataBanco, paraHoraBanco } = require('../../src/utils/datas');
+const { hmac, decifrar } = require('../../src/utils/cripto');
 
 // Testes unitários: nenhum banco envolvido. O repository e o cache são falsos, e o relógio
 // ("agora") é fixo, para as regras de data e de 12 horas não dependerem da hora do teste.
@@ -53,6 +54,9 @@ function montar({ sessao = sessaoDoBanco(), agora = AGORA } = {}) {
     informarRespondente: jest.fn().mockResolvedValue(1),
     gravarResposta: jest.fn(async (dados) => ({ ...dados, respondidaEm: agora })),
     gravarNota: jest.fn().mockResolvedValue(1),
+    buscarTermoVigente: jest.fn().mockResolvedValue({ id: 3, versao: 2, texto: 'Termos v2.' }),
+    existeDuplicata: jest.fn().mockResolvedValue(false),
+    criarManifestacao: jest.fn().mockResolvedValue({ id: 42 }),
   };
   const versaoDados = { incrementar: jest.fn() };
   const service = criarPesquisaService({ pesquisaRepository, versaoDados, agora: () => agora });
@@ -363,6 +367,129 @@ describe('pesquisaService.registrarNota', () => {
     });
     await expect(service.registrarNota(params, { nota: 9 })).rejects.toMatchObject({
       codigo: 'SESSAO_EXPIRADA',
+    });
+  });
+});
+
+describe('pesquisaService.buscarTermoVigente', () => {
+  it('devolve a versão vigente', async () => {
+    const { service } = montar();
+    await expect(service.buscarTermoVigente()).resolves.toEqual({
+      id: 3,
+      versao: 2,
+      texto: 'Termos v2.',
+    });
+  });
+
+  it('sem nenhuma versão = 404 TERMOS_INDISPONIVEIS', async () => {
+    const { service, repo } = montar();
+    repo.buscarTermoVigente.mockResolvedValue(null);
+    await expect(service.buscarTermoVigente()).rejects.toMatchObject({
+      status: 404,
+      codigo: 'TERMOS_INDISPONIVEIS',
+    });
+  });
+});
+
+describe('pesquisaService.registrarManifestacao', () => {
+  const comTelefone = { texto: 'Quero retorno.', telefone: '(51) 99999-9999', termoId: 3 };
+
+  it('anônima: copia setor, data e turno da sessão, sem telefone, e avisa o cache', async () => {
+    const { service, repo, versaoDados } = montar();
+
+    const resultado = await service.registrarManifestacao(params, { texto: 'Demorou.' });
+
+    expect(resultado).toEqual({ id: 42, protocolo: 42 });
+    expect(repo.criarManifestacao).toHaveBeenCalledWith({
+      sessaoId: SESSAO_ID,
+      setorId: 10,
+      dataOcorrencia: paraDataBanco('2026-10-15'),
+      turnoId: 1,
+      texto: 'Demorou.',
+    });
+    expect(repo.buscarTermoVigente).not.toHaveBeenCalled();
+    expect(repo.existeDuplicata).not.toHaveBeenCalled();
+    expect(versaoDados.incrementar).toHaveBeenCalledTimes(1);
+  });
+
+  it('CT15 - com telefone: normaliza, cifra, calcula o hash e registra o consentimento', async () => {
+    const { service, repo } = montar();
+
+    await service.registrarManifestacao(params, comTelefone);
+
+    const dados = repo.criarManifestacao.mock.calls[0][0];
+    expect(dados).toMatchObject({
+      texto: 'Quero retorno.',
+      telefoneHash: hmac('5551999999999'),
+      pediuRetorno: true,
+      termoPrivacidadeId: 3,
+      consentimentoEm: AGORA,
+      possivelDuplicata: false,
+    });
+    expect(decifrar(dados.telefoneCifrado)).toBe('5551999999999');
+    expect(JSON.stringify(dados)).not.toContain('99999-9999');
+  });
+
+  it('CT35 - procura a duplicata no mesmo setor nas últimas 24 horas e só marca', async () => {
+    const { service, repo } = montar();
+    repo.existeDuplicata.mockResolvedValue(true);
+
+    await service.registrarManifestacao(params, comTelefone);
+
+    expect(repo.existeDuplicata).toHaveBeenCalledWith({
+      telefoneHash: hmac('5551999999999'),
+      setorId: 10,
+      desde: new Date(AGORA.getTime() - 24 * HORA),
+    });
+    expect(repo.criarManifestacao.mock.calls[0][0].possivelDuplicata).toBe(true);
+  });
+
+  it('texto vazio depois da limpeza é gravado como vazio (só o pedido de retorno)', async () => {
+    const { service, repo } = montar();
+    await service.registrarManifestacao(params, { ...comTelefone, texto: '' });
+    expect(repo.criarManifestacao.mock.calls[0][0].texto).toBeNull();
+  });
+
+  it('termos que não são os vigentes = 409 TERMO_DESATUALIZADO, sem gravar', async () => {
+    const { service, repo, versaoDados } = montar();
+    await expect(
+      service.registrarManifestacao(params, { ...comTelefone, termoId: 1 }),
+    ).rejects.toMatchObject({ status: 409, codigo: 'TERMO_DESATUALIZADO' });
+    expect(repo.criarManifestacao).not.toHaveBeenCalled();
+    expect(versaoDados.incrementar).not.toHaveBeenCalled();
+  });
+
+  it('sem nenhuma versão dos termos, o telefone também é recusado com 409', async () => {
+    const { service, repo } = montar();
+    repo.buscarTermoVigente.mockResolvedValue(null);
+    await expect(service.registrarManifestacao(params, comTelefone)).rejects.toMatchObject({
+      codigo: 'TERMO_DESATUALIZADO',
+    });
+  });
+
+  it('telefone inválido = 400 TELEFONE_INVALIDO, sem gravar', async () => {
+    const { service, repo } = montar();
+    await expect(
+      service.registrarManifestacao(params, { ...comTelefone, telefone: '123' }),
+    ).rejects.toMatchObject({ status: 400, codigo: 'TELEFONE_INVALIDO' });
+    expect(repo.criarManifestacao).not.toHaveBeenCalled();
+  });
+
+  it('sessão aberta há mais de 12 horas = 409 SESSAO_EXPIRADA, sem gravar', async () => {
+    const { service, repo } = montar({
+      sessao: sessaoDoBanco({ iniciadaEm: new Date(AGORA.getTime() - 13 * HORA) }),
+    });
+    await expect(service.registrarManifestacao(params, { texto: 'Oi.' })).rejects.toMatchObject({
+      codigo: 'SESSAO_EXPIRADA',
+    });
+    expect(repo.criarManifestacao).not.toHaveBeenCalled();
+  });
+
+  it('sessão inexistente = 404 SESSAO_NAO_ENCONTRADA', async () => {
+    const { service } = montar({ sessao: null });
+    await expect(service.registrarManifestacao(params, { texto: 'Oi.' })).rejects.toMatchObject({
+      status: 404,
+      codigo: 'SESSAO_NAO_ENCONTRADA',
     });
   });
 });

@@ -698,6 +698,197 @@ function montarManifestacoes(sorteio, sessoes, etapasPorSetor, setores, turnos, 
   return manifestacoes;
 }
 
+// Manifestações da pesquisa COM telefone para retorno (RF10), para a lista e o alerta da
+// Ouvidoria (S1). Os números são fictícios (5551900000001, 5551900000002...). diasAtras: há
+// quantos dias o paciente enviou; NOVA há 5 dias ou mais já passou das 48 horas úteis do
+// primeiro contato (RF16), mesmo com um fim de semana no meio. notaBaixa: o conteúdo combina com
+// a nota (RF08), quando há uma sessão assim. duplicataDe: o mesmo telefone de outra, no mesmo
+// setor e em menos de 24 horas (RF19). O tipo vazio fica "a classificar" (RN12).
+const MANIFESTACOES_COM_TELEFONE = [
+  {
+    telefone: '5551900000001',
+    diasAtras: 6,
+    notaBaixa: true,
+    tipo: null,
+    texto: 'Fiquei sem saber o resultado do exame. Gostaria que alguém me ligasse.',
+  },
+  {
+    telefone: '5551900000002',
+    diasAtras: 5,
+    notaBaixa: true,
+    tipo: 'RECLAMACAO',
+    texto: 'Esperei mais de três horas e ninguém informava a previsão.',
+  },
+  // Só o pedido de retorno, sem texto (ck_manifestacao_texto_ou_retorno)
+  { telefone: '5551900000003', diasAtras: 8, notaBaixa: true, tipo: null, texto: null },
+  {
+    telefone: '5551900000004',
+    diasAtras: 3,
+    notaBaixa: false,
+    tipo: 'ELOGIO',
+    texto: 'Quero agradecer pessoalmente à equipe que atendeu o meu pai.',
+  },
+  {
+    telefone: '5551900000005',
+    diasAtras: 1,
+    notaBaixa: false,
+    tipo: 'ELOGIO',
+    texto: 'Atendimento excelente da enfermagem. Podem me ligar se precisarem.',
+  },
+  {
+    telefone: '5551900000006',
+    diasAtras: 2,
+    notaBaixa: true,
+    tipo: null,
+    texto: 'A sala de espera estava muito cheia e faltavam cadeiras.',
+  },
+  {
+    telefone: '5551900000006',
+    duplicataDe: 5,
+    tipo: null,
+    texto: 'Mandei uma mensagem antes, mas queria acrescentar que o banheiro estava fechado.',
+  },
+  {
+    telefone: '5551900000007',
+    diasAtras: 4,
+    notaBaixa: false,
+    tipo: 'SUGESTAO',
+    texto: 'Sugiro um painel com a ordem de chamada. Posso explicar melhor por telefone.',
+  },
+];
+
+// Cada uma nasce de uma sessão digital concluída que ainda não tem manifestação, no momento da
+// conclusão. Roda também num banco que já tem a demonstração, mas só uma vez: se já houver
+// alguma manifestação com pedido de retorno (mesmo finalizada, D7), não cria nada.
+async function criarManifestacoesComTelefone(prisma) {
+  // Só aqui: a cifra e o hash usam as chaves TELEFONE_* do .env, validadas por config/env.js
+  const { cifrar, hmac } = require('../src/utils/cripto');
+  const { normalizar } = require('../src/utils/telefone');
+
+  await prisma.$transaction(async (tx) => {
+    if ((await tx.manifestacao.count({ where: { pediuRetorno: true } })) > 0) {
+      console.log('Demonstração: manifestações com telefone já existem; nada foi duplicado.');
+      return;
+    }
+    const termo = await tx.termoPrivacidade.findUnique({ where: { versao: 1 } });
+    const candidatas = await tx.sessao.findMany({
+      where: {
+        canal: { in: ['CELULAR', 'TABLET'] },
+        notaGeral: { not: null },
+        manifestacoes: { none: {} },
+      },
+      select: {
+        id: true,
+        setorId: true,
+        dataAtendimento: true,
+        turnoId: true,
+        notaGeral: true,
+        concluidaEm: true,
+      },
+      orderBy: { concluidaEm: 'asc' },
+    });
+    if (candidatas.length < MANIFESTACOES_COM_TELEFONE.length) {
+      console.log('Demonstração: manifestações com telefone puladas, por falta de sessões.');
+      return;
+    }
+
+    const usadas = new Set();
+    const distancia = (sessao, alvo) => Math.abs(sessao.concluidaEm.getTime() - alvo);
+    // A sessão livre mais próxima do momento desejado. As preferências são tentadas em ordem:
+    // vale a primeira que alguma sessão atende; se nenhuma atender, qualquer sessão livre serve
+    function escolher(alvo, ...preferencias) {
+      const livres = candidatas.filter((sessao) => !usadas.has(sessao.id));
+      const preferida = preferencias.find((regra) => livres.some(regra));
+      const lista = preferida ? livres.filter(preferida) : livres;
+      return lista.reduce((melhor, sessao) =>
+        distancia(sessao, alvo) < distancia(melhor, alvo) ? sessao : melhor,
+      );
+    }
+
+    const agora = Date.now();
+    const escolhidas = [];
+    const sessaoDoItem = new Map();
+    for (const [indice, item] of MANIFESTACOES_COM_TELEFONE.entries()) {
+      let sessao;
+      if (item.duplicataDe !== undefined) {
+        // Outra sessão do mesmo setor, concluída até 24 horas depois da original
+        const original = sessaoDoItem.get(item.duplicataDe);
+        const inicio = original.concluidaEm.getTime();
+        const seguintes = candidatas.filter(
+          (s) =>
+            !usadas.has(s.id) &&
+            s.setorId === original.setorId &&
+            s.concluidaEm.getTime() > inicio &&
+            s.concluidaEm.getTime() - inicio < 24 * 3600000,
+        );
+        // De preferência com a nota no mesmo lado da original (RF08)
+        const faixa = (nota) => (nota <= 6 ? 'baixa' : 'alta');
+        const mesmaFaixa = (s) => faixa(s.notaGeral) === faixa(original.notaGeral);
+        sessao = seguintes.find(mesmaFaixa) ?? seguintes[0];
+        if (!sessao) {
+          console.log('Demonstração: sem sessão para a duplicata; ela foi pulada.');
+          continue;
+        }
+      } else {
+        const baixa = (s) => (item.notaBaixa ? s.notaGeral <= 6 : s.notaGeral >= 7);
+        // Para a original da duplicata, só serve uma sessão com outra do mesmo setor logo depois
+        const temSeguinte = (s) =>
+          candidatas.some(
+            (outra) =>
+              outra.id !== s.id &&
+              outra.setorId === s.setorId &&
+              outra.concluidaEm > s.concluidaEm &&
+              outra.concluidaEm.getTime() - s.concluidaEm.getTime() < 24 * 3600000,
+          );
+        const ehOriginal = MANIFESTACOES_COM_TELEFONE.some((outro) => outro.duplicataDe === indice);
+        const alvo = agora - item.diasAtras * 86400000;
+        sessao = ehOriginal
+          ? escolher(alvo, (s) => temSeguinte(s) && baixa(s), temSeguinte)
+          : escolher(alvo, baixa);
+      }
+      usadas.add(sessao.id);
+      sessaoDoItem.set(indice, sessao);
+      escolhidas.push({ item, sessao });
+    }
+
+    const dados = escolhidas.map(({ item, sessao }) => {
+      const numero = normalizar(item.telefone);
+      const telefoneHash = hmac(numero);
+      // A marca é calculada como na API (RF19), a partir das já escolhidas
+      const possivelDuplicata = escolhidas.some(
+        (outra) =>
+          outra.sessao !== sessao &&
+          hmac(normalizar(outra.item.telefone)) === telefoneHash &&
+          outra.sessao.setorId === sessao.setorId &&
+          outra.sessao.concluidaEm < sessao.concluidaEm &&
+          sessao.concluidaEm.getTime() - outra.sessao.concluidaEm.getTime() < 24 * 3600000,
+      );
+      return {
+        origem: 'PESQUISA',
+        sessaoId: sessao.id,
+        tipo: item.tipo,
+        setorId: sessao.setorId,
+        dataOcorrencia: sessao.dataAtendimento,
+        turnoId: sessao.turnoId,
+        texto: item.texto,
+        pediuRetorno: true,
+        telefoneCifrado: cifrar(numero),
+        telefoneHash,
+        termoPrivacidadeId: termo.id,
+        consentimentoEm: sessao.concluidaEm,
+        status: 'NOVA',
+        possivelDuplicata,
+        criadoEm: sessao.concluidaEm,
+        atualizadoEm: sessao.concluidaEm,
+      };
+    });
+    await tx.manifestacao.createMany({ data: dados });
+    console.log(
+      `Demonstração: ${dados.length} manifestações com telefone fictício criadas (${dados.filter((d) => d.possivelDuplicata).length} possível duplicata).`,
+    );
+  });
+}
+
 async function criarDemonstracao(prisma, superAdmin, variaveis) {
   const agora = new Date();
   const hoje = partesLocais(agora).data;
@@ -766,6 +957,7 @@ async function criarDemonstracao(prisma, superAdmin, variaveis) {
     },
     { timeout: 60000 },
   );
+  await criarManifestacoesComTelefone(prisma);
 }
 
 async function main() {
