@@ -1,5 +1,5 @@
-// Controllers: leem os dados já validados (req.validado) e chamam o service.
-// Nenhuma regra de negócio aqui.
+// Controllers: leem os dados já validados (req.validado) e o usuário logado (req.usuario),
+// chamam o service e devolvem o status HTTP. Nenhuma regra de negócio aqui.
 function criarManifestacoesController({ manifestacoesService }) {
   async function listar(req, res) {
     res.json(await manifestacoesService.listar(req.validado.query));
@@ -13,7 +13,22 @@ function criarManifestacoesController({ manifestacoesService }) {
     res.json(await manifestacoesService.detalhar(req.validado.params));
   }
 
-  return { listar, listarAlertas, detalhar };
+  async function classificar(req, res) {
+    const { params, body } = req.validado;
+    res.json(await manifestacoesService.classificar(params, body, req.usuario));
+  }
+
+  async function registrarTentativa(req, res) {
+    const { params, body } = req.validado;
+    res.status(201).json(await manifestacoesService.registrarTentativa(params, body, req.usuario));
+  }
+
+  async function finalizar(req, res) {
+    const { params, body } = req.validado;
+    res.json(await manifestacoesService.finalizar(params, body, req.usuario));
+  }
+
+  return { listar, listarAlertas, detalhar, classificar, registrarTentativa, finalizar };
 }
 
 module.exports = { criarManifestacoesController };

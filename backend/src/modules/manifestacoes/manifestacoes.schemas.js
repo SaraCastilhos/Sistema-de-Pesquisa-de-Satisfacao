@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const { camposPaginacao } = require('../../utils/paginacao');
 const { paraDataBanco } = require('../../utils/datas');
+const { sanitizar } = require('../../utils/sanitizar');
 
 // Esquemas das entradas, usados pelo middleware validar. Campos que não estão aqui são recusados
 // com 400 (o validar torna todo z.object estrito).
@@ -49,4 +50,47 @@ const listar = {
 
 const detalhar = { params };
 
-module.exports = { listar, detalhar };
+// Texto livre da Ouvidoria, sem HTML (RNF09). Só espaços ou tags fica vazio. O máximo é o mesmo
+// do relato do paciente (2.000 caracteres).
+const textoLivre = (rotulo) =>
+  z
+    .string()
+    .transform(sanitizar)
+    .pipe(z.string().max(2000, `${rotulo} pode ter até 2.000 caracteres.`));
+
+// Classificar ou corrigir o tipo (RN12). O tipo é obrigatório: nunca volta a ficar vazio, e
+// "A_CLASSIFICAR" só existe como filtro da lista.
+const classificar = {
+  params,
+  body: z.object({ tipo: z.enum(['ELOGIO', 'RECLAMACAO', 'SUGESTAO']) }),
+};
+
+// Tentativa de contato (RF15). A data e a hora vêm com fuso (ex.: 2026-10-30T14:00:00-03:00);
+// se é futura, quem confere é o service, que conhece a hora de agora.
+const registrarTentativa = {
+  params,
+  body: z.object({
+    realizadaEm: z.iso
+      .datetime({
+        offset: true,
+        message: 'use data e hora com fuso (ex.: 2026-10-30T14:00:00-03:00)',
+      })
+      .transform((texto) => new Date(texto)),
+    resultado: z.enum(['CONTATO_REALIZADO', 'SEM_SUCESSO']),
+    // Vazia vira null: a coluna aceita vazio
+    observacao: textoLivre('A observação')
+      .transform((texto) => texto || null)
+      .optional(),
+  }),
+};
+
+// Finalização do chamado (RF15, RN07): o desfecho é obrigatório
+const finalizar = {
+  params,
+  body: z.object({
+    status: z.enum(['ENCERRADA', 'SEM_RETORNO']),
+    desfecho: textoLivre('O desfecho').pipe(z.string().min(1, 'Descreva o desfecho do chamado.')),
+  }),
+};
+
+module.exports = { listar, detalhar, classificar, registrarTentativa, finalizar };
