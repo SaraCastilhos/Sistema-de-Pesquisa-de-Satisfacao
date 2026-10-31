@@ -50,4 +50,16 @@ const equipes = {
   query: z.object({ ...periodo, setorId: id }).refine(...inicioAntesDoFim),
 };
 
-module.exports = { filtros, indicadores, equipes };
+// A exportação usa os mesmos filtros do dashboard (RF29): o mesmo schema, não uma cópia
+const respostasXlsx = indicadores;
+
+const relatorioMensal = {
+  query: z.object({
+    competencia: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'use o formato AAAA-MM (ex.: 2026-10)'),
+    setorId: id.optional(),
+  }),
+};
+
+module.exports = { filtros, indicadores, equipes, respostasXlsx, relatorioMensal };

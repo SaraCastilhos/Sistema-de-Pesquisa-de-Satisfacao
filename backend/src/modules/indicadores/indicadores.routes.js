@@ -35,5 +35,19 @@ router.get(
   validar(schemas.equipes),
   controller.equipes,
 );
+router.get(
+  '/respostas.xlsx',
+  autenticar,
+  exigirPerfil(PERFIS.SUPER_ADMIN, PERFIS.GESTOR),
+  validar(schemas.respostasXlsx),
+  controller.respostasXlsx,
+);
+router.get(
+  '/relatorio-mensal.pdf',
+  autenticar,
+  exigirPerfil(PERFIS.SUPER_ADMIN, PERFIS.GESTOR),
+  validar(schemas.relatorioMensal),
+  controller.relatorioMensal,
+);
 
 module.exports = router;
