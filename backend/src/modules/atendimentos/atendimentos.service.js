@@ -25,15 +25,18 @@ function criarAtendimentosService({
   }
 
   // Cria ou corrige a quantidade de um setor num mês (RF25). Vale também para setor desativado,
-  // para corrigir meses em que ele funcionava.
+  // para corrigir meses em que ele funcionava. Mandar a mesma quantidade de novo não grava nada:
+  // nem o log de uma "alteração" que não houve, nem a troca de quem informou.
   async function salvar({ setorId, competencia }, { quantidade }, usuario) {
-    const atendimento = await prisma.$transaction(async (tx) => {
+    const { atendimento, mudou } = await prisma.$transaction(async (tx) => {
       if (!(await atendimentosRepository.buscarSetor(setorId, tx))) {
         throw new AppError(404, 'SETOR_NAO_ENCONTRADO', 'Setor não encontrado.');
       }
 
       const mes = paraCompetencia(competencia);
       const antes = formatar(await atendimentosRepository.buscarDoMes(setorId, mes, tx));
+      if (antes && antes.quantidade === quantidade) return { atendimento: antes, mudou: false };
+
       const depois = formatar(
         await atendimentosRepository.salvar(
           { setorId, competencia: mes, quantidade, informadoPorId: usuario.id },
@@ -51,11 +54,11 @@ function criarAtendimentosService({
         },
         tx,
       );
-      return depois;
+      return { atendimento: depois, mudou: true };
     });
 
     // Os atendimentos mudam a taxa de adesão do dashboard e do TV Wall (seção 8)
-    versaoDados.incrementar();
+    if (mudou) versaoDados.incrementar();
     return atendimento;
   }
 

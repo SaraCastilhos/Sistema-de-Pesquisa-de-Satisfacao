@@ -85,6 +85,22 @@ describe('atendimentosService.salvar', () => {
     });
   });
 
+  it('a mesma quantidade de novo não grava, não registra log e não avisa o cache', async () => {
+    const existente = doBanco({ quantidade: 800 });
+    const { service, atendimentosRepository, auditoriaRepository, versaoDados } = montar({
+      existente,
+    });
+    const salvo = await service.salvar(
+      { setorId: 10, competencia: '2026-10' },
+      { quantidade: 800 },
+      superAdmin,
+    );
+    expect(salvo).toMatchObject({ quantidade: 800, competencia: '2026-10' });
+    expect(atendimentosRepository.salvar).not.toHaveBeenCalled();
+    expect(auditoriaRepository.registrar).not.toHaveBeenCalled();
+    expect(versaoDados.incrementar).not.toHaveBeenCalled();
+  });
+
   it('setor inexistente = 404, sem gravar nada', async () => {
     const { service, atendimentosRepository, versaoDados } = montar();
     atendimentosRepository.buscarSetor.mockResolvedValue(null);
