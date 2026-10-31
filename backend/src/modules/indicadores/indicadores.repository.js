@@ -220,6 +220,65 @@ function criarIndicadoresRepository(prisma) {
     }));
   }
 
+  // Linhas da exportação (RF29): as mesmas sessões válidas do dashboard, com os mesmos filtros.
+  // Pede uma a mais que o limite, para o service saber que passou dele. Nunca traz telefone,
+  // profissional nem texto de manifestação.
+  async function listarSessoesParaExportar(filtros, limite) {
+    const linhas = await prisma.$queryRaw`
+      SELECT s.id AS id,
+             st.nome AS setor,
+             s.data_atendimento AS data,
+             s.turno_origem::text AS origem,
+             t.nome AS turno,
+             s.canal::text AS canal,
+             s.respondente::text AS respondente,
+             s.tipo_atendimento::text AS tipo_atendimento,
+             s.nota_geral AS nota
+      FROM sessao s
+      JOIN setor st ON st.id = s.setor_id
+      LEFT JOIN turno t ON t.id = s.turno_id
+      WHERE ${SESSAO_VALIDA}
+        AND ${filtroDeSessoes(filtros)}
+      ORDER BY s.data_atendimento, s.iniciada_em, s.id
+      LIMIT ${limite + 1}`;
+    return linhas.map((l) => ({
+      id: l.id,
+      setor: l.setor,
+      data: l.data,
+      origem: l.origem,
+      turno: l.turno,
+      canal: l.canal,
+      respondente: l.respondente,
+      tipoAtendimento: l.tipo_atendimento,
+      nota: l.nota === null ? null : Number(l.nota),
+    }));
+  }
+
+  // Respostas das mesmas sessões; com filtro de etapa, só as dela (como no bloco de etapas)
+  async function listarRespostasParaExportar(filtros) {
+    const linhas = await prisma.$queryRaw`
+      SELECT r.sessao_id AS sessao_id,
+             e.nome AS etapa,
+             p.texto AS pergunta,
+             r.pulada AS pulada,
+             r.valor_numero AS valor
+      FROM resposta r
+      JOIN pergunta p ON p.id = r.pergunta_id
+      JOIN etapa e ON e.id = p.etapa_id
+      JOIN sessao s ON s.id = r.sessao_id
+      WHERE ${SESSAO_VALIDA}
+        AND ${filtroDeSessoes(filtros)}
+        ${filtros.etapaId ? Prisma.sql`AND e.id = ${filtros.etapaId}` : Prisma.empty}
+      ORDER BY s.data_atendimento, s.iniciada_em, s.id, e.ordem, p.ordem`;
+    return linhas.map((l) => ({
+      sessaoId: l.sessao_id,
+      etapa: l.etapa,
+      pergunta: l.pergunta,
+      pulada: l.pulada,
+      valor: l.valor === null ? null : Number(l.valor),
+    }));
+  }
+
   return {
     listarSetores,
     buscarEtapa,
@@ -231,6 +290,8 @@ function criarIndicadoresRepository(prisma) {
     listarAtendimentos,
     contarManifestacoes,
     agregarEquipes,
+    listarSessoesParaExportar,
+    listarRespostasParaExportar,
   };
 }
 

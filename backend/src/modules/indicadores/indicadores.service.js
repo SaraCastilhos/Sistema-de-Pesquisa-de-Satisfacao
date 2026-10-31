@@ -3,6 +3,8 @@ const { PERFIS } = require('../../middlewares/exigirPerfil');
 const { REGRAS } = require('../../config/regras');
 const { somarDias } = require('../../utils/datas');
 const { criarCache } = require('../../utils/cache');
+const { gerarPlanilha } = require('./indicadores.excel');
+const { gerarRelatorio } = require('./indicadores.pdf');
 
 // ---------------------------------------------------------------------------
 // Cálculos (funções puras, sem banco): as definições da seção 7.1 do modelo. Exportadas para
@@ -124,6 +126,8 @@ const RESPONDENTES = ['PACIENTE', 'FAMILIAR'];
 const TIPOS_ATENDIMENTO = ['SUS', 'PLANO_DE_SAUDE', 'PARTICULAR'];
 const NAO_INFORMADO = 'NAO_INFORMADO';
 const A_CLASSIFICAR = 'A_CLASSIFICAR';
+// Teto técnico da exportação (memória do servidor): acima disso, o pedido deve ter um período menor
+const SESSOES_MAXIMAS_NA_EXPORTACAO = 20000;
 
 // ---------------------------------------------------------------------------
 
@@ -133,6 +137,8 @@ function criarIndicadoresService({
   indicadoresRepository: repo,
   versaoDados,
   cache = criarCache(),
+  // Trocado nos testes, para conferir o limite sem gravar milhares de sessões
+  sessoesMaximas = SESSOES_MAXIMAS_NA_EXPORTACAO,
 }) {
   // Setores que o usuário pode ver com o filtro pedido. Gestor SEMPRE só os seus (RNF10).
   async function setoresPermitidos(setorId, usuario) {
@@ -333,10 +339,11 @@ function criarIndicadoresService({
     return cache.lembrar(chave, versaoDados.atual(), calcularValor);
   }
 
-  async function indicadores(consulta, usuario) {
+  // Filtros do RF28 já conferidos: setores permitidos ao usuário e etapa do setor
+  async function montarFiltros(consulta, usuario) {
     const setorIds = await setoresPermitidos(consulta.setorId, usuario);
     await conferirEtapa(consulta.etapaId, consulta.setorId);
-    const filtros = {
+    return {
       inicio: consulta.inicio,
       fim: consulta.fim,
       setorIds,
@@ -347,7 +354,57 @@ function criarIndicadoresService({
       respondente: consulta.respondente,
       tipoAtendimento: consulta.tipoAtendimento,
     };
+  }
+
+  async function indicadores(consulta, usuario) {
+    const filtros = await montarFiltros(consulta, usuario);
     return lembrar('indicadores', filtros, () => calcular(filtros));
+  }
+
+  // Exportação em Excel com os mesmos filtros do dashboard (RF29). Sob demanda, sem cache.
+  async function exportarExcel(consulta, usuario) {
+    const filtros = await montarFiltros(consulta, usuario);
+    const linhas = await repo.listarSessoesParaExportar(filtros, sessoesMaximas);
+    if (linhas.length > sessoesMaximas) {
+      throw new AppError(
+        422,
+        'EXPORTACAO_MUITO_GRANDE',
+        `A exportação passa de ${sessoesMaximas} sessões. Escolha um período menor.`,
+      );
+    }
+    const respostas = await repo.listarRespostasParaExportar(filtros);
+    // O número liga as duas abas sem expor o código da sessão (D10)
+    const numeroDaSessao = new Map(linhas.map((l, i) => [l.id, i + 1]));
+    const arquivo = await gerarPlanilha({
+      sessoes: linhas.map((l) => ({ ...l, numero: numeroDaSessao.get(l.id) })),
+      respostas: respostas
+        .filter((r) => numeroDaSessao.has(r.sessaoId))
+        .map((r) => ({ ...r, numero: numeroDaSessao.get(r.sessaoId) })),
+    });
+    const mesInteiro =
+      filtros.inicio.slice(0, 7) === filtros.fim.slice(0, 7) &&
+      filtros.inicio.endsWith('-01') &&
+      filtros.fim === ultimoDiaDoMes(filtros.fim.slice(0, 7));
+    const nome = mesInteiro
+      ? `respostas-${filtros.inicio.slice(0, 7)}.xlsx`
+      : `respostas-${filtros.inicio}-a-${filtros.fim}.xlsx`;
+    return { nome, arquivo };
+  }
+
+  // Relatório do mês em PDF (RF29): os números são os de GET /api/indicadores do mês inteiro
+  async function relatorioMensal({ competencia, setorId }, usuario) {
+    const dados = await indicadores(
+      { inicio: `${competencia}-01`, fim: ultimoDiaDoMes(competencia), setorId },
+      usuario,
+    );
+    // O nome vem do cadastro, não da tabela por setor, para o título nunca depender dela
+    const nomeDoSetor = setorId ? (await repo.listarSetores([setorId]))[0]?.nome : null;
+    const arquivo = await gerarRelatorio({
+      competencia,
+      dados,
+      nomeDoSetor,
+    });
+    return { nome: `relatorio-${competencia}.pdf`, arquivo };
   }
 
   // Nota média por equipe de um setor, pela escala (D3). Nunca devolve nomes de profissionais.
@@ -365,7 +422,7 @@ function criarIndicadoresService({
     });
   }
 
-  return { indicadores, equipes };
+  return { indicadores, equipes, exportarExcel, relatorioMensal };
 }
 
 module.exports = {
