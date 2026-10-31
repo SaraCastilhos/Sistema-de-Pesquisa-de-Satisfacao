@@ -1,5 +1,248 @@
 # Contrato das rotas do módulo indicadores, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Indicadores
-    description: Dashboard, exportação em Excel e relatório mensal
-paths: {}
+    description: Indicadores do dashboard (RF27, RF28)
+paths:
+  /api/indicadores:
+    get:
+      tags: [Indicadores]
+      summary: Indicadores do dashboard
+      description: >
+        Todos os blocos da tela "Visão geral" com os filtros do RF28, pelas definições da seção 7.1
+        do modelo de dados. O período usa a data do atendimento. As sessões de papel entram em todos
+        os números; a de papel sem turno fica fora do filtro por turno. Super Admin vê todos os
+        setores; Gestor, só os seus (403 se pedir outro). Os resultados vêm do cache enquanto
+        nenhum dado que afeta os indicadores mudar (seção 8 da arquitetura). Nunca devolve nomes de
+        profissionais. Porcentagens e notas vêm como null quando não há o que calcular. A evolução
+        vai até o fim do período, nunca depois dele.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IndicadoresInicio'
+        - $ref: '#/components/parameters/IndicadoresFim'
+        - name: setorId
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: turnoId
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: etapaId
+          in: query
+          required: false
+          description: >
+            Só junto com setorId, e uma etapa desse setor (senão 422). Limita as sessões às que
+            avaliaram alguma pergunta da etapa, e o bloco de etapas a ela.
+          schema: { type: integer, minimum: 1 }
+        - name: canal
+          in: query
+          required: false
+          schema: { type: string, enum: [CELULAR, TABLET, PAPEL] }
+        - name: respondente
+          in: query
+          required: false
+          schema: { type: string, enum: [PACIENTE, FAMILIAR] }
+        - name: tipoAtendimento
+          in: query
+          required: false
+          schema: { type: string, enum: [SUS, PLANO_DE_SAUDE, PARTICULAR] }
+      responses:
+        '200':
+          description: Indicadores do período
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Indicadores'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: Etapa sem setor ou de outro setor (ETAPA_FORA_DO_SETOR)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/indicadores/equipes:
+    get:
+      tags: [Indicadores]
+      summary: Nota média por equipe de um setor
+      description: >
+        Liga cada sessão completa à equipe pela escala do setor, da data e do turno (D3). Sessões de
+        dias sem escala e as de papel sem turno não entram. Gestor só nos seus setores.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: setorId
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - $ref: '#/components/parameters/IndicadoresInicio'
+        - $ref: '#/components/parameters/IndicadoresFim'
+      responses:
+        '200':
+          description: Equipes da maior para a menor nota média
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IndicadoresEquipe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  parameters:
+    IndicadoresInicio:
+      name: inicio
+      in: query
+      required: true
+      description: 'Primeiro dia do período, AAAA-MM-DD (ex.: 2026-10-01)'
+      example: '2026-10-01'
+      schema: { type: string, format: date }
+    IndicadoresFim:
+      name: fim
+      in: query
+      required: true
+      description: 'Último dia do período, AAAA-MM-DD (ex.: 2026-10-31); não pode ser antes do início'
+      example: '2026-10-31'
+      schema: { type: string, format: date }
+  schemas:
+    IndicadoresResumo:
+      type: object
+      properties:
+        totalRespostas:
+          type: integer
+          description: Sessões com nota geral ou pelo menos uma resposta não pulada
+        respostasCompletas: { type: integer, description: Sessões com nota geral }
+        notaMedia: { type: [number, 'null'], description: Média da nota geral (0 a 10) }
+        nps: { type: [integer, 'null'], description: '% de notas 9–10 menos % de notas 0–6' }
+        indiceSatisfacao: { type: [integer, 'null'], description: '% de notas de 7 a 10' }
+        taxaAdesao:
+          type: [number, 'null']
+          description: >
+            Respostas completas ÷ atendimentos informados, em %, só nos setores e meses com
+            atendimentos informados; null = atendimentos não informados. Se o período pega só parte
+            de um mês, entra a parte proporcional dos atendimentos desse mês (ex.: 10 de 31 dias)
+        elogios: { type: integer, description: Manifestações do tipo elogio no período }
+    IndicadoresGrupo:
+      type: object
+      properties:
+        valor: { type: string, description: Valor do campo ou NAO_INFORMADO }
+        totalRespostas: { type: integer }
+        notaMedia: { type: [number, 'null'] }
+        indiceSatisfacao: { type: [integer, 'null'] }
+    Indicadores:
+      type: object
+      properties:
+        periodo:
+          type: object
+          properties: { inicio: { type: string }, fim: { type: string } }
+        periodoAnterior:
+          type: object
+          description: Mesmo tamanho, logo antes (meses inteiros comparam com os meses anteriores)
+          properties: { inicio: { type: string }, fim: { type: string } }
+        resumo: { $ref: '#/components/schemas/IndicadoresResumo' }
+        comparativo: { $ref: '#/components/schemas/IndicadoresResumo' }
+        distribuicao:
+          type: array
+          description: As 11 notas, de 0 a 10
+          items:
+            type: object
+            properties: { nota: { type: integer }, quantidade: { type: integer } }
+        divisaoNps:
+          type: object
+          description: Porcentagens de promotores (9–10), neutros (7–8) e detratores (0–6)
+          properties:
+            promotores: { type: [integer, 'null'] }
+            neutros: { type: [integer, 'null'] }
+            detratores: { type: [integer, 'null'] }
+        evolucao:
+          type: array
+          description: Os últimos 6 meses até o mês do fim do período
+          items:
+            type: object
+            properties:
+              mes: { type: string, examples: ['2026-10'] }
+              notaMedia: { type: [number, 'null'] }
+              indiceSatisfacao: { type: [integer, 'null'] }
+        setores:
+          type: array
+          description: Da maior para a menor nota média
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              nome: { type: string }
+              notaMedia: { type: [number, 'null'] }
+              totalRespostas: { type: integer }
+              indiceSatisfacao: { type: [integer, 'null'] }
+              variacaoNotaMedia:
+                type: [number, 'null']
+                description: Nota média menos a do período anterior
+              taxaAdesao: { type: [number, 'null'] }
+              etapas:
+                type: array
+                description: Nomes das etapas ativas, na ordem
+                items: { type: string }
+        etapas:
+          type: array
+          description: >
+            Etapas com avaliações no período. Com setorId, na ordem do setor; sem, do menor índice
+            para o maior.
+          items:
+            type: object
+            properties:
+              setor:
+                type: object
+                properties: { id: { type: integer }, nome: { type: string } }
+              etapa:
+                type: object
+                properties: { id: { type: integer }, nome: { type: string } }
+              avaliacoes: { type: integer }
+              mediaRostinhos: { type: number, description: Média de 1 a 5 }
+              indiceSatisfacao: { type: integer, description: '% de rostinhos 4 e 5' }
+        manifestacoes:
+          type: array
+          description: >
+            Uma linha por tipo, mais A_CLASSIFICAR (tipo ainda não definido). Valem o período (data
+            da ocorrência), os setores e o turno (o da manifestação ou, na da pesquisa, o da sessão).
+            Os filtros de etapa, canal, quem respondeu e tipo de atendimento não se aplicam: a
+            manifestação da pesquisa não tem etapa, e a dos outros canais não tem sessão.
+          items:
+            type: object
+            properties:
+              tipo: { type: string, enum: [ELOGIO, RECLAMACAO, SUGESTAO, A_CLASSIFICAR] }
+              quantidade: { type: integer }
+        porRespondente:
+          type: array
+          items: { $ref: '#/components/schemas/IndicadoresGrupo' }
+        porTipoAtendimento:
+          type: array
+          items: { $ref: '#/components/schemas/IndicadoresGrupo' }
+    IndicadoresEquipe:
+      type: object
+      properties:
+        equipe:
+          type: object
+          properties: { id: { type: integer }, nome: { type: string } }
+        respostas: { type: integer }
+        notaMedia: { type: number }
