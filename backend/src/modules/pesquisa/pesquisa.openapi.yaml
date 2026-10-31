@@ -1,5 +1,440 @@
 # Contrato das rotas do módulo pesquisa, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Pesquisa
-    description: Rotas públicas da pesquisa do paciente (sessão, respostas, nota e manifestação)
-paths: {}
+    description: >
+      Pesquisa pública do paciente, sem login (RF01–RF08, RF13, RF32). Leituras com até 300
+      consultas por minuto por IP; gravações com até 60 envios por minuto por IP (RNF08).
+paths:
+  /api/publico/pesquisas/{slug}:
+    get:
+      tags: [Pesquisa]
+      summary: Dados para montar a pesquisa de um setor
+      description: >
+        Setor ativo pelo endereço (RN02). Traz as etapas do setor na ordem, só as ativas com pelo
+        menos uma pergunta ativa, cada uma com as suas perguntas ativas na ordem (todas rostinho de
+        1 a 5), e os turnos ativos para a tela de data e período do celular. O paciente não escolhe
+        etapas: a tela percorre todas, e ele pula o que não viveu (RF06). A lista de etapas pode vir
+        vazia; aí a pesquisa vai direto à nota.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          example: pronto-atendimento
+          schema: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+      responses:
+        '200':
+          description: Pesquisa do setor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesquisaDoSetor'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Setor inexistente ou desativado (PESQUISA_INDISPONIVEL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/sessoes:
+    post:
+      tags: [Pesquisa]
+      summary: Abre uma sessão da pesquisa
+      description: >
+        Cria a sessão com o setor, o canal e a data e o turno calculados pela hora de abertura, no
+        horário de São Paulo (RF02, D2). Um turno que atravessa a meia-noite pertence à data em que
+        começou: às 02:00 do dia 15, no turno 19:00–07:00, a data é o dia 14 (D13). O canal PAPEL
+        não é aceito aqui: o formulário de papel é digitado pela Ouvidoria (RF33). A sessão vale por
+        12 horas (RF13).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PesquisaSessaoEntrada'
+            examples:
+              celular:
+                summary: Pelo QR Code, no celular
+                value: { slug: pronto-atendimento, canal: CELULAR }
+              tablet:
+                summary: No tablet do setor
+                value: { slug: pronto-atendimento, canal: TABLET }
+      responses:
+        '201':
+          description: Sessão aberta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesquisaSessao'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Setor inexistente ou desativado (PESQUISA_INDISPONIVEL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/sessoes/{id}:
+    get:
+      tags: [Pesquisa]
+      summary: Situação da sessão, para retomar de onde parou
+      description: >
+        Diz o que já foi feito (perguntas respondidas ou puladas, data informada, respondente
+        informado, nota) e se a sessão expirou, sem devolver os valores dados (RF13). Sessões de
+        papel não aparecem aqui.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID), devolvido na abertura
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Situação da sessão
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PesquisaSituacao'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Sessão inexistente ou de formulário de papel (SESSAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/sessoes/{id}/atendimento:
+    put:
+      tags: [Pesquisa]
+      summary: Grava a data e o período informados no celular (uma vez só)
+      description: >
+        Tela "Quando foi o seu atendimento?", só no celular (RN03, D2). Troca a data e o turno
+        calculados pelos informados e marca a origem como INFORMADO. A data não pode ser depois de
+        hoje, e o turno precisa estar ativo. A gravação tem a condição dentro do próprio UPDATE:
+        de dois envios simultâneos, só o primeiro grava.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID), devolvido na abertura
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PesquisaAtendimentoEntrada'
+            example: { data: '2026-10-30', turnoId: 2 }
+      responses:
+        '200':
+          description: Data e turno gravados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dataAtendimento, turnoId, turnoOrigem]
+                properties:
+                  dataAtendimento: { type: string, format: date }
+                  turnoId: { type: integer }
+                  turnoOrigem: { type: string, enum: [INFORMADO] }
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Sessão inexistente ou de formulário de papel (SESSAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Data já informada (ATENDIMENTO_JA_INFORMADO) ou sessão expirada (SESSAO_EXPIRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            Sessão de tablet (ATENDIMENTO_SO_NO_CELULAR), data depois de hoje (DATA_FUTURA) ou turno
+            inexistente ou desativado (TURNO_INDISPONIVEL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/sessoes/{id}/respondente:
+    put:
+      tags: [Pesquisa]
+      summary: Grava quem respondeu e o tipo de atendimento (uma vez só)
+      description: >
+        Tela "Sobre o atendimento", no celular e no tablet (RF32, D18). Os dois campos são
+        opcionais, mas pelo menos um precisa vir: quem pula a tela não chama a rota. Grava só se os
+        dois ainda estiverem vazios, com a condição dentro do próprio UPDATE.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID), devolvido na abertura
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PesquisaRespondenteEntrada'
+            examples:
+              osDois:
+                summary: Os dois campos
+                value: { respondente: PACIENTE, tipoAtendimento: SUS }
+              soUm:
+                summary: Só o tipo de atendimento
+                value: { tipoAtendimento: PLANO_DE_SAUDE }
+      responses:
+        '200':
+          description: Gravado; o campo não informado vem como null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [respondente, tipoAtendimento]
+                properties:
+                  respondente: { type: [string, 'null'], enum: [PACIENTE, FAMILIAR, null] }
+                  tipoAtendimento:
+                    type: [string, 'null']
+                    enum: [SUS, PLANO_DE_SAUDE, PARTICULAR, null]
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Sessão inexistente ou de formulário de papel (SESSAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Já informado (RESPONDENTE_JA_INFORMADO) ou sessão expirada (SESSAO_EXPIRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/sessoes/{id}/respostas:
+    post:
+      tags: [Pesquisa]
+      summary: Grava uma resposta de rostinho ou um pulo
+      description: >
+        Gravada assim que o paciente avança (RF07), e conta nos indicadores mesmo sem a nota
+        (RN01). A pergunta precisa estar ativa, numa etapa ativa do setor da sessão. Cada pergunta
+        é gravada uma vez só por sessão (RF13): o segundo envio recebe 409, e o frontend o trata
+        como sucesso. Depois da nota, ainda dá para complementar dentro das 12 horas.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID), devolvido na abertura
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PesquisaRespostaEntrada'
+            examples:
+              rostinho:
+                summary: Rostinho 4 (Satisfeito)
+                value: { perguntaId: 1, pulada: false, valor: 4 }
+              pulo:
+                summary: Pergunta pulada
+                value: { perguntaId: 2, pulada: true }
+      responses:
+        '201':
+          description: Resposta gravada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [perguntaId, pulada, valor]
+                properties:
+                  perguntaId: { type: integer }
+                  pulada: { type: boolean }
+                  valor: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Sessão inexistente ou de formulário de papel (SESSAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Pergunta já respondida (RESPOSTA_JA_REGISTRADA) ou sessão expirada (SESSAO_EXPIRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: Pergunta inexistente, desativada, de etapa desativada ou de outro setor (PERGUNTA_INDISPONIVEL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+  /api/publico/sessoes/{id}/nota:
+    put:
+      tags: [Pesquisa]
+      summary: Grava a nota de recomendação de 0 a 10 (uma vez só)
+      description: >
+        A única pergunta obrigatória (RF03). Grava também a hora da conclusão. A condição "sem nota
+        e aberta há menos de 12 horas" fica dentro do próprio UPDATE: de dois envios simultâneos,
+        só o primeiro grava (RN01).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID), devolvido na abertura
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PesquisaNotaEntrada'
+            example: { nota: 9 }
+      responses:
+        '200':
+          description: Nota gravada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [nota]
+                properties:
+                  nota: { type: integer, minimum: 0, maximum: 10 }
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '404':
+          description: Sessão inexistente ou de formulário de papel (SESSAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Nota já registrada (NOTA_JA_REGISTRADA) ou sessão expirada (SESSAO_EXPIRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+components:
+  schemas:
+    PesquisaDoSetor:
+      type: object
+      required: [setor, etapas, turnos]
+      properties:
+        setor:
+          type: object
+          required: [nome, slug]
+          properties:
+            nome: { type: string, examples: [Pronto Atendimento] }
+            slug: { type: string, examples: [pronto-atendimento] }
+        etapas:
+          type: array
+          items:
+            type: object
+            required: [id, nome, perguntas]
+            properties:
+              id: { type: integer }
+              nome: { type: string, examples: [Recepção] }
+              perguntas:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  required: [id, texto]
+                  properties:
+                    id: { type: integer }
+                    texto: { type: string, examples: [Como foi o atendimento da recepção?] }
+        turnos:
+          type: array
+          items:
+            type: object
+            required: [id, nome, horaInicio, horaFim]
+            properties:
+              id: { type: integer }
+              nome: { type: string, examples: [Dia] }
+              horaInicio: { type: string, examples: ['07:00'] }
+              horaFim: { type: string, examples: ['19:00'] }
+    PesquisaSessaoEntrada:
+      type: object
+      additionalProperties: false
+      required: [slug, canal]
+      properties:
+        slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' }
+        canal: { type: string, enum: [CELULAR, TABLET] }
+    PesquisaSessao:
+      type: object
+      required: [id, canal, dataAtendimento, turnoId, turnoOrigem, iniciadaEm]
+      properties:
+        id: { type: string, format: uuid }
+        canal: { type: string, enum: [CELULAR, TABLET] }
+        dataAtendimento: { type: string, format: date, examples: ['2026-10-31'] }
+        turnoId: { type: integer }
+        turnoOrigem: { type: string, enum: [CALCULADO, INFORMADO] }
+        iniciadaEm: { type: string, format: date-time }
+    PesquisaSituacao:
+      allOf:
+        - $ref: '#/components/schemas/PesquisaSessao'
+        - type: object
+          required:
+            [expiraEm, expirada, atendimentoInformado, respondenteInformado, temNota, respostas]
+          properties:
+            expiraEm: { type: string, format: date-time }
+            expirada: { type: boolean }
+            atendimentoInformado: { type: boolean }
+            respondenteInformado: { type: boolean }
+            temNota: { type: boolean }
+            respostas:
+              type: array
+              description: Perguntas já respondidas ou puladas, na ordem em que foram gravadas
+              items:
+                type: object
+                required: [perguntaId, pulada]
+                properties:
+                  perguntaId: { type: integer }
+                  pulada: { type: boolean }
+    PesquisaAtendimentoEntrada:
+      type: object
+      additionalProperties: false
+      required: [data, turnoId]
+      properties:
+        data: { type: string, format: date, description: 'AAAA-MM-DD, hoje ou antes' }
+        turnoId: { type: integer, minimum: 1 }
+    PesquisaRespondenteEntrada:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        respondente: { type: string, enum: [PACIENTE, FAMILIAR] }
+        tipoAtendimento: { type: string, enum: [SUS, PLANO_DE_SAUDE, PARTICULAR] }
+    PesquisaRespostaEntrada:
+      type: object
+      additionalProperties: false
+      required: [perguntaId, pulada]
+      description: Pulada vem sem valor; respondida, com o rostinho de 1 a 5
+      properties:
+        perguntaId: { type: integer, minimum: 1 }
+        pulada: { type: boolean }
+        valor: { type: integer, minimum: 1, maximum: 5 }
+    PesquisaNotaEntrada:
+      type: object
+      additionalProperties: false
+      required: [nota]
+      properties:
+        nota: { type: integer, minimum: 0, maximum: 10 }
