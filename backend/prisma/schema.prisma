@@ -26,6 +26,8 @@ enum PerfilUsuario {
 enum CanalResposta {
   CELULAR
   TABLET
+  // Formulário de papel digitado pela Ouvidoria (RF33, D19)
+  PAPEL
 
   @@map("canal_resposta")
 }
@@ -33,8 +35,26 @@ enum CanalResposta {
 enum OrigemTurno {
   INFORMADO
   CALCULADO
+  // Papel sem data: vale a data em que a Ouvidoria recolheu o formulário (RN03, D19)
+  ESTIMADO
 
   @@map("origem_turno")
+}
+
+// Quem respondeu e tipo de atendimento: opcionais e sem identificar a pessoa (RF32, D18)
+enum Respondente {
+  PACIENTE
+  FAMILIAR
+
+  @@map("respondente")
+}
+
+enum TipoAtendimento {
+  SUS
+  PLANO_DE_SAUDE
+  PARTICULAR
+
+  @@map("tipo_atendimento")
 }
 
 enum TipoManifestacao {
@@ -76,6 +96,8 @@ enum AcaoAuditoria {
   ALTERACAO
   DESATIVACAO
   ANONIMIZACAO
+  // Só a exclusão de formulário de papel digitado (RN01, D19)
+  EXCLUSAO
 
   @@map("acao_auditoria")
 }
@@ -277,18 +299,22 @@ model Pergunta {
 
 model Sessao {
   // UUID: o código circula nas rotas públicas e não pode ser adivinhado (D10)
-  id              String        @id @default(uuid()) @db.Uuid
-  setorId         Int           @map("setor_id")
+  id              String           @id @default(uuid()) @db.Uuid
+  setorId         Int              @map("setor_id")
   canal           CanalResposta
-  dataAtendimento DateTime      @map("data_atendimento") @db.Date
-  turnoId         Int           @map("turno_id")
-  turnoOrigem     OrigemTurno   @default(CALCULADO) @map("turno_origem")
-  notaGeral       Int?          @map("nota_geral") @db.SmallInt
-  iniciadaEm      DateTime      @default(now()) @map("iniciada_em") @db.Timestamptz
-  concluidaEm     DateTime?     @map("concluida_em") @db.Timestamptz
+  dataAtendimento DateTime         @map("data_atendimento") @db.Date
+  // Vazio só no formulário de papel sem turno (ck_sessao_turno_so_papel_vazio, D19)
+  turnoId         Int?             @map("turno_id")
+  turnoOrigem     OrigemTurno      @default(CALCULADO) @map("turno_origem")
+  // Opcionais: vazio = não informado (RF32, D18)
+  respondente     Respondente?
+  tipoAtendimento TipoAtendimento? @map("tipo_atendimento")
+  notaGeral       Int?             @map("nota_geral") @db.SmallInt
+  iniciadaEm      DateTime         @default(now()) @map("iniciada_em") @db.Timestamptz
+  concluidaEm     DateTime?        @map("concluida_em") @db.Timestamptz
 
   setor         Setor          @relation(fields: [setorId], references: [id], onDelete: Restrict)
-  turno         Turno          @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  turno         Turno?         @relation(fields: [turnoId], references: [id], onDelete: Restrict)
   respostas     Resposta[]
   manifestacoes Manifestacao[]
 
