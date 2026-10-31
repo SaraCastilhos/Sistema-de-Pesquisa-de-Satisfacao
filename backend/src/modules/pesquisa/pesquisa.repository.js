@@ -1,8 +1,9 @@
 const { Prisma } = require('@prisma/client');
 const { AppError } = require('../../utils/AppError');
 
-// Acesso às tabelas sessao e resposta (e leitura de setor, etapa, pergunta e turno). Só
-// consultas: as regras (pergunta disponível, 12 horas, data não futura) ficam no service.
+// Acesso às tabelas sessao, resposta e manifestacao (e leitura de setor, etapa, pergunta, turno
+// e termo_privacidade). Só consultas: as regras (pergunta disponível, 12 horas, data não futura,
+// telefone com aceite) ficam no service.
 // As gravações únicas (data, respondente, nota) levam a condição dentro do próprio UPDATE
 // (consultas 4.2 e 4.3 do mapeamento): de dois envios simultâneos, só um encontra a linha.
 
@@ -156,6 +157,32 @@ function criarPesquisaRepository(prisma) {
     return count;
   }
 
+  // A versão vigente dos termos é a de maior número (D8)
+  function buscarTermoVigente() {
+    return prisma.termoPrivacidade.findFirst({
+      select: { id: true, versao: true, texto: true },
+      orderBy: { versao: 'desc' },
+    });
+  }
+
+  // Possível duplicata (consulta 4.10, RF19): outra manifestação com o mesmo hash de telefone e
+  // setor desde o momento indicado. Atendida pelo índice (telefone_hash, setor_id).
+  async function existeDuplicata({ telefoneHash, setorId, desde }) {
+    const encontrada = await prisma.manifestacao.findFirst({
+      where: { telefoneHash, setorId, criadoEm: { gte: desde } },
+      select: { id: true },
+    });
+    return encontrada !== null;
+  }
+
+  // Só devolve o id: o telefone e o hash nunca saem da gravação (RNF10)
+  function criarManifestacao(dados) {
+    return prisma.manifestacao.create({
+      data: { ...dados, origem: 'PESQUISA', status: 'NOVA' },
+      select: { id: true },
+    });
+  }
+
   return {
     buscarSetorPorSlug,
     listarEtapasComPerguntas,
@@ -169,6 +196,9 @@ function criarPesquisaRepository(prisma) {
     informarRespondente,
     gravarResposta,
     gravarNota,
+    buscarTermoVigente,
+    existeDuplicata,
+    criarManifestacao,
   };
 }
 
