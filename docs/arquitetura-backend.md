@@ -305,7 +305,7 @@ Usadas pela pesquisa e pelo TV Wall. São protegidas por validação, pelo códi
 | `POST` | `/api/manifestacoes/:id/anexos` | SA | Anexar foto de uma manifestação recebida por escrito | RF17 |
 | `GET` | `/api/manifestacoes/:id/anexos/:anexoId` | SA | Ver a foto | RF17 |
 | `GET` `POST` | `/api/formularios-papel` | SA | Listar e digitar formulários de pesquisa em papel (módulo `pesquisa`) | RF33, RN03 |
-| `PUT` `DELETE` | `/api/formularios-papel/:id` | SA | Corrigir ou excluir um formulário de papel digitado; o estado anterior completo vai para o log | RF33, RN01, RNF11 |
+| `GET` `PUT` `DELETE` | `/api/formularios-papel/:id` | SA | Ver um formulário de papel digitado com as respostas, corrigi-lo ou excluí-lo; na correção e na exclusão, o estado anterior completo vai para o log | RF33, RN01, RNF11 |
 | `GET` | `/api/indicadores` | SA, G | Todos os painéis do dashboard para os filtros escolhidos | RF27, RF28 |
 | `GET` | `/api/indicadores/equipes` | SA, G | Nota por equipe de um setor | RF28, RN04 |
 | `GET` | `/api/indicadores/respostas.xlsx` | SA, G | Exportação em Excel com os filtros aplicados | RF29 |
