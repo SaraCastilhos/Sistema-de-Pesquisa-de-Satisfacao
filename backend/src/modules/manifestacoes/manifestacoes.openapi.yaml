@@ -1,7 +1,7 @@
 # Contrato das rotas do módulo manifestacoes, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Ouvidoria
-    description: Manifestações, tentativas de contato, finalização, anexos e TV Wall
+    description: Manifestações, outros canais, tentativas de contato, finalização e fotos
 paths:
   /api/manifestacoes:
     get:
@@ -74,6 +74,103 @@ paths:
           $ref: '#/components/responses/NaoAutenticado'
         '403':
           $ref: '#/components/responses/SemPermissao'
+    post:
+      tags: [Ouvidoria]
+      summary: Registra uma manifestação recebida por outro canal (só Super Admin)
+      description: >
+        Manifestação recebida por telefone, presencialmente, por e-mail ou por escrito (RF17), que
+        segue o mesmo fluxo de chamado da pesquisa e nasce com status NOVA. Quem registra é o usuário
+        logado. O tipo é obrigatório, porque quem registra já é a Ouvidoria (RN12). A etapa, se
+        anotada, precisa ser uma etapa ativa do mesmo setor; o turno, se informado, precisa estar
+        ativo; a data não pode ser depois de hoje. O profissional citado nunca aparece em indicadores
+        (RN04). O telefone é opcional e só é aceito com o consentimento obtido no contato, na versão
+        vigente dos termos (RN06), com as mesmas regras da pesquisa: normalizado, cifrado, com hash
+        para a possível duplicata no mesmo setor em 24 horas (RF19). Texto e profissional citado têm
+        o HTML removido (RNF09). O registro vai para o log (CRIACAO), sem o relato, o nome citado e o
+        telefone (RNF11). Devolve o chamado criado, como o GET /api/manifestacoes/{id}. O canal
+        PESQUISA não é aceito: essa manifestação só nasce pela pesquisa do paciente.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [origem, tipo, setorId, dataOcorrencia]
+              additionalProperties: false
+              properties:
+                origem: { type: string, enum: [TELEFONE, PRESENCIAL, EMAIL, PAPEL] }
+                tipo: { type: string, enum: [ELOGIO, RECLAMACAO, SUGESTAO] }
+                setorId: { type: integer, minimum: 1, examples: [1] }
+                dataOcorrencia:
+                  type: string
+                  format: date
+                  description: Data do atendimento; hoje ou antes
+                  examples: ['2026-10-27']
+                turnoId: { type: integer, minimum: 1, description: 'Opcional; turno ativo' }
+                etapaId:
+                  type: integer
+                  minimum: 1
+                  description: Opcional; etapa ativa do mesmo setor
+                profissionalCitado:
+                  type: string
+                  maxLength: 120
+                  description: Opcional; sem HTML; vazio conta como não informado
+                  examples: [Enfermeira Fulana]
+                texto:
+                  type: string
+                  maxLength: 2000
+                  description: >
+                    Relato, sem HTML. Pode faltar só quando há telefone para retorno.
+                  examples: [Carta entregue na recepção sobre a demora no atendimento.]
+                telefone:
+                  type: string
+                  maxLength: 30
+                  description: Opcional; com DDD, em qualquer formato. Exige aceiteTermos e termoId.
+                  examples: ['(51) 99999-9999']
+                aceiteTermos:
+                  type: boolean
+                  description: Consentimento obtido pela Ouvidoria no contato; precisa ser true com telefone
+                termoId:
+                  type: integer
+                  minimum: 1
+                  description: Versão vigente dos termos de privacidade (GET /api/publico/termos)
+      responses:
+        '201':
+          description: Manifestação registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestacaoDetalhe'
+        '400':
+          description: >
+            Dados inválidos (DADOS_INVALIDOS), como tipo ausente, canal PESQUISA, telefone sem o aceite
+            ou sem a versão dos termos, ou nem texto nem telefone; ou telefone em formato inválido
+            (TELEFONE_INVALIDO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '409':
+          description: Os termos aceitos não são os vigentes (TERMO_DESATUALIZADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            Setor inexistente (SETOR_INEXISTENTE) ou desativado (SETOR_INATIVO), etapa que não é do
+            setor (ETAPA_DE_OUTRO_SETOR) ou desativada (ETAPA_INATIVA), turno inexistente ou
+            desativado (TURNO_INDISPONIVEL) ou data depois de hoje (DATA_FUTURA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
   /api/manifestacoes/alertas:
     get:
       tags: [Ouvidoria]
@@ -317,6 +414,124 @@ paths:
             Chamado ainda a classificar (TIPO_NAO_DEFINIDO), Sem retorno com menos de 3 tentativas
             sem sucesso (CHAMADO_SEM_TENTATIVAS_SUFICIENTES) ou Sem retorno num chamado anônimo
             (CHAMADO_SEM_TELEFONE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/manifestacoes/{id}/anexos:
+    post:
+      tags: [Ouvidoria]
+      summary: Anexa a foto de uma manifestação recebida por escrito (só Super Admin)
+      description: >
+        Uma foto por envio, no campo "foto", até 300 KB (o frontend já reduz a foto antes de
+        enviar). Só JPEG, PNG ou WebP, reconhecidos pelos primeiros bytes do arquivo, e não pela
+        extensão nem pelo tipo declarado. Só em manifestação do canal PAPEL, com o chamado aberto, e
+        no máximo 3 fotos por manifestação (RF17). Quem enviou é o usuário logado, e o envio vai para
+        o log (CRIACAO) só com os metadados da foto (RNF11). Devolve o chamado atualizado, como o GET
+        /api/manifestacoes/{id}, com a foto nova em anexos.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Número de protocolo
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [foto]
+              properties:
+                foto:
+                  type: string
+                  format: binary
+                  description: Imagem JPEG, PNG ou WebP de até 300 KB
+      responses:
+        '201':
+          description: Foto anexada; chamado atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestacaoDetalhe'
+        '400':
+          description: >
+            Foto ausente (FOTO_AUSENTE), conteúdo que não é JPEG, PNG nem WebP (FOTO_INVALIDA), mais de
+            um arquivo, outro campo ou campos a mais (ENVIO_INVALIDO) ou id inválido (DADOS_INVALIDOS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Manifestação não encontrada (MANIFESTACAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: O chamado já foi finalizado (CHAMADO_JA_FINALIZADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '413':
+          description: A foto passa de 300 KB (ARQUIVO_GRANDE_DEMAIS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            Manifestação de outro canal que não o papel (ANEXO_SO_PAPEL) ou que já tem 3 fotos
+            (LIMITE_DE_FOTOS)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/manifestacoes/{id}/anexos/{anexoId}:
+    get:
+      tags: [Ouvidoria]
+      summary: Devolve uma foto anexada (só Super Admin)
+      description: >
+        A imagem, com o Content-Type gravado no envio, para o navegador exibir. Sem cache
+        (Cache-Control private, no-store), porque a foto pode ter dados pessoais. A foto precisa ser
+        da manifestação da URL.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Número de protocolo
+          schema: { type: integer, minimum: 1 }
+        - name: anexoId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: A imagem
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Foto não encontrada nesta manifestação (ANEXO_NAO_ENCONTRADO)
           content:
             application/json:
               schema:
