@@ -1,6 +1,7 @@
-// Acesso às tabelas manifestacao, tentativa_contato e anexo_manifestacao. Só consultas: as
-// regras (filtro "a classificar", alerta de 48 horas, telefone decifrado, ciclo do chamado)
-// ficam no service. As funções que gravam recebem o "cliente" opcional, para rodarem dentro da
+// Acesso às tabelas manifestacao, tentativa_contato e anexo_manifestacao (e leitura de setor,
+// etapa, turno e termo_privacidade, para o registro de outros canais). Só consultas: as regras
+// (filtro "a classificar", alerta de 48 horas, telefone decifrado, ciclo do chamado, etapa do
+// setor, fotos) ficam no service. As funções que gravam recebem o "cliente" opcional, para rodarem dentro da
 // transação do service.
 
 const STATUS_ABERTOS = ['NOVA', 'EM_CONTATO'];
@@ -98,7 +99,7 @@ function criarManifestacoesRepository(prisma) {
   function buscarSituacao(id, cliente = prisma) {
     return cliente.manifestacao.findUnique({
       where: { id },
-      select: { id: true, tipo: true, status: true, pediuRetorno: true },
+      select: { id: true, origem: true, tipo: true, status: true, pediuRetorno: true },
     });
   }
 
@@ -141,6 +142,85 @@ function criarManifestacoesRepository(prisma) {
     return count;
   }
 
+  // Para o registro de outros canais (RF17): o service confere existência, ativo e setor
+  function buscarSetor(id) {
+    return prisma.setor.findUnique({ where: { id }, select: { id: true, ativo: true } });
+  }
+
+  function buscarEtapa(id) {
+    return prisma.etapa.findUnique({
+      where: { id },
+      select: { id: true, setorId: true, ativo: true },
+    });
+  }
+
+  function buscarTurno(id) {
+    return prisma.turno.findUnique({ where: { id }, select: { id: true, ativo: true } });
+  }
+
+  // A versão vigente dos termos é a de maior número (D8)
+  function buscarTermoVigente() {
+    return prisma.termoPrivacidade.findFirst({
+      select: { id: true, versao: true },
+      orderBy: { versao: 'desc' },
+    });
+  }
+
+  // Possível duplicata (consulta 4.10, RF19): outra manifestação com o mesmo hash de telefone e
+  // setor desde o momento indicado. Atendida pelo índice (telefone_hash, setor_id).
+  async function existeDuplicata({ telefoneHash, setorId, desde }) {
+    const encontrada = await prisma.manifestacao.findFirst({
+      where: { telefoneHash, setorId, criadoEm: { gte: desde } },
+      select: { id: true },
+    });
+    return encontrada !== null;
+  }
+
+  // Só devolve o id: o telefone e o hash nunca saem da gravação (RNF10)
+  function criar(dados, cliente = prisma) {
+    return cliente.manifestacao.create({
+      data: { ...dados, status: 'NOVA' },
+      select: { id: true },
+    });
+  }
+
+  // Trava a linha do chamado até o fim da transação, e só se ele ainda estiver aberto, num
+  // comando só (como marcarEmContato). Dois envios de foto ao mesmo tempo esperam um pelo outro,
+  // então a contagem de fotos que vem depois nunca passa do limite. count 0 = já finalizado.
+  async function travarAberta(id, cliente = prisma) {
+    const { count } = await cliente.manifestacao.updateMany({
+      where: { id, status: { in: STATUS_ABERTOS } },
+      data: { atualizadoEm: new Date() },
+    });
+    return count;
+  }
+
+  function contarAnexos(manifestacaoId, cliente = prisma) {
+    return cliente.anexoManifestacao.count({ where: { manifestacaoId } });
+  }
+
+  // Grava a foto e devolve só os metadados: o conteúdo nunca volta da gravação
+  function anexarFoto({ manifestacaoId, conteudo, tipoMime, enviadoPorId }, cliente = prisma) {
+    return cliente.anexoManifestacao.create({
+      data: {
+        manifestacaoId,
+        conteudo,
+        tipoMime,
+        tamanhoBytes: conteudo.length,
+        enviadoPorId,
+      },
+      select: { id: true, manifestacaoId: true, tipoMime: true, tamanhoBytes: true },
+    });
+  }
+
+  // Única consulta que lê o conteúdo de uma foto. O anexo precisa ser da manifestação da URL.
+  function buscarFoto(manifestacaoId, id) {
+    return prisma.anexoManifestacao.findFirst({
+      where: { id, manifestacaoId },
+      select: { id: true, conteudo: true, tipoMime: true, tamanhoBytes: true },
+    });
+  }
+
   return {
     listar,
     buscarDetalhe,
@@ -151,6 +231,16 @@ function criarManifestacoesRepository(prisma) {
     marcarEmContato,
     criarTentativa,
     finalizar,
+    buscarSetor,
+    buscarEtapa,
+    buscarTurno,
+    buscarTermoVigente,
+    existeDuplicata,
+    criar,
+    travarAberta,
+    contarAnexos,
+    anexarFoto,
+    buscarFoto,
   };
 }
 

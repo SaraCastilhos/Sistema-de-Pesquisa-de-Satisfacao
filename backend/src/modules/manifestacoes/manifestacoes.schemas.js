@@ -2,6 +2,7 @@ const { z } = require('zod');
 const { camposPaginacao } = require('../../utils/paginacao');
 const { paraDataBanco } = require('../../utils/datas');
 const { sanitizar } = require('../../utils/sanitizar');
+const { camposDoTelefone, conferirTelefoneEAceite } = require('./manifestacoes.telefone');
 
 // Esquemas das entradas, usados pelo middleware validar. Campos que não estão aqui são recusados
 // com 400 (o validar torna todo z.object estrito).
@@ -93,4 +94,49 @@ const finalizar = {
   }),
 };
 
-module.exports = { listar, detalhar, classificar, registrarTentativa, finalizar };
+// Manifestação recebida por outro canal (RF17). Quem registra já é a Ouvidoria, então o tipo é
+// obrigatório (RN12, ck_manifestacao_tipo_outros_canais). O canal PESQUISA não entra: essa
+// manifestação só nasce pela rota pública da sessão (B11). Se a etapa é do setor, se o setor e
+// o turno estão ativos e se a data não é futura, quem confere é o service.
+const registrar = {
+  body: z
+    .object({
+      origem: z.enum(['TELEFONE', 'PRESENCIAL', 'EMAIL', 'PAPEL']),
+      tipo: z.enum(['ELOGIO', 'RECLAMACAO', 'SUGESTAO']),
+      setorId: z.number().int().positive(),
+      dataOcorrencia: data,
+      turnoId: z.number().int().positive().optional(),
+      etapaId: z.number().int().positive().optional(),
+      // Sem HTML, como o texto. Vazio vira não informado. Os 120 caracteres são os da coluna.
+      // Nunca aparece em indicadores (RN04).
+      profissionalCitado: z
+        .string()
+        .transform(sanitizar)
+        .pipe(z.string().max(120, 'O nome do profissional pode ter até 120 caracteres.'))
+        .transform((texto) => texto || undefined)
+        .optional(),
+      // O mesmo limite e a mesma limpeza do relato do paciente (ck_manifestacao_texto_tamanho)
+      texto: textoLivre('O relato').optional(),
+      // Telefone com o consentimento que a Ouvidoria obteve no contato (RN06), na versão vigente
+      // dos termos, com as mesmas regras da pesquisa
+      ...camposDoTelefone,
+    })
+    .superRefine(conferirTelefoneEAceite),
+};
+
+// Foto de uma manifestação recebida por escrito (RF17). O arquivo chega pelo multer, em
+// req.file; o corpo multipart não tem outros campos.
+const anexar = { params, body: z.object({}) };
+
+const verAnexo = { params: z.object({ id, anexoId: id }) };
+
+module.exports = {
+  listar,
+  detalhar,
+  classificar,
+  registrarTentativa,
+  finalizar,
+  registrar,
+  anexar,
+  verAnexo,
+};

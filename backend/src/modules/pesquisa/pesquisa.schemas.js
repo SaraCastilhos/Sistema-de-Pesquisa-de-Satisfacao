@@ -1,6 +1,10 @@
 const { z } = require('zod');
 const { paraDataBanco } = require('../../utils/datas');
 const { sanitizar } = require('../../utils/sanitizar');
+const {
+  camposDoTelefone,
+  conferirTelefoneEAceite,
+} = require('../manifestacoes/manifestacoes.telefone');
 
 // Esquemas das entradas, usados pelo middleware validar. Campos que não estão aqui são recusados
 // com 400 (o validar torna todo z.object estrito). As rotas são públicas: tudo o que chega é
@@ -100,38 +104,10 @@ const registrarManifestacao = {
         .transform(sanitizar)
         .pipe(z.string().max(2000, 'A mensagem pode ter até 2.000 caracteres.'))
         .optional(),
-      // O formato é conferido no service (utils/telefone.js), que já devolve o número normalizado.
-      // O máximo é um limite técnico, para não aceitar textos enormes.
-      telefone: z.string().max(30).optional(),
-      aceiteTermos: z.boolean().optional(),
-      termoId: id.optional(),
+      ...camposDoTelefone,
     })
-    .superRefine((corpo, ctx) => {
-      // RN06: telefone só com o aceite dos termos. Sem aceite, nada é gravado (CT16): quem
-      // descarta o telefone é a tela (RF10), não a API.
-      if (corpo.telefone !== undefined && corpo.aceiteTermos !== true) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['aceiteTermos'],
-          message: 'Para deixar o telefone, é preciso aceitar os termos de privacidade.',
-        });
-      }
-      if (corpo.telefone !== undefined && corpo.termoId === undefined) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['termoId'],
-          message: 'Informe a versão dos termos de privacidade que foi aceita.',
-        });
-      }
-      // Mensagem vazia só é aceita quando o paciente pede retorno (ck_manifestacao_texto_ou_retorno)
-      if (!corpo.texto && corpo.telefone === undefined) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['texto'],
-          message: 'Escreva a mensagem ou deixe um telefone para retorno.',
-        });
-      }
-    }),
+    // RN06 e ck_manifestacao_texto_ou_retorno, as mesmas regras dos outros canais (RF17)
+    .superRefine(conferirTelefoneEAceite),
 };
 
 module.exports = {

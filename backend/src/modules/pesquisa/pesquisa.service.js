@@ -1,8 +1,7 @@
 const { AppError } = require('../../utils/AppError');
 const { REGRAS } = require('../../config/regras');
 const { classificar } = require('../../utils/turnos');
-const { normalizar } = require('../../utils/telefone');
-const { cifrar, hmac } = require('../../utils/cripto');
+const { prepararTelefone } = require('../manifestacoes/manifestacoes.telefone');
 const { horaLocal, paraDataBanco, deDataBanco, deHoraBanco } = require('../../utils/datas');
 
 const HORA_MS = 60 * 60 * 1000;
@@ -273,33 +272,14 @@ function criarPesquisaService({ pesquisaRepository: repo, versaoDados, agora = (
     };
 
     if (telefone !== undefined) {
-      // Normalizado antes da cifra e do hash: o mesmo número escrito de dois jeitos dá o mesmo
-      // hash (D7, CT35). Número inválido = 400 TELEFONE_INVALIDO.
-      const numero = normalizar(telefone);
-      const vigente = await repo.buscarTermoVigente();
-      if (!vigente || vigente.id !== termoId) {
-        throw new AppError(
-          409,
-          'TERMO_DESATUALIZADO',
-          'Os termos de privacidade mudaram. Leia a versão atual e aceite de novo.',
-        );
-      }
-      const momento = agora();
-      const telefoneHash = hmac(numero);
-      // Só um aviso: a manifestação é gravada de qualquer forma (RF19)
-      const possivelDuplicata = await repo.existeDuplicata({
-        telefoneHash,
-        setorId: sessao.setorId,
-        desde: new Date(momento.getTime() - REGRAS.JANELA_DUPLICATA_HORAS * HORA_MS),
-      });
-      Object.assign(dados, {
-        telefoneCifrado: cifrar(numero),
-        telefoneHash,
-        pediuRetorno: true,
-        termoPrivacidadeId: vigente.id,
-        consentimentoEm: momento,
-        possivelDuplicata,
-      });
+      // Normalização, termos vigentes, cifra, hash e duplicata: regra comum com os outros canais
+      Object.assign(
+        dados,
+        await prepararTelefone(
+          { telefone, termoId, setorId: sessao.setorId, momento: agora() },
+          repo,
+        ),
+      );
     }
 
     const manifestacao = await repo.criarManifestacao(dados);

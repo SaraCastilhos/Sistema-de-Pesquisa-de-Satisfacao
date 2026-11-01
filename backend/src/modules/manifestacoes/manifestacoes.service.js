@@ -1,9 +1,10 @@
 const { AppError } = require('../../utils/AppError');
 const { REGRAS } = require('../../config/regras');
-const { deDataBanco, paraDataBanco } = require('../../utils/datas');
+const { deDataBanco, paraDataBanco, horaLocal } = require('../../utils/datas');
 const { paraConsulta, montarPagina } = require('../../utils/paginacao');
 const horasUteis = require('../../utils/horasUteis');
 const cripto = require('../../utils/cripto');
+const { prepararTelefone } = require('./manifestacoes.telefone');
 
 // Formato de um chamado na lista e no alerta. O id é também o número de protocolo (B11).
 // Sem texto e sem telefone (RF14, RNF10): o repository nem os lê.
@@ -21,6 +22,33 @@ function formatarItem({ sessao, _count, dataOcorrencia, ...manifestacao }) {
 // Folga para o relógio do computador da Ouvidoria estar um pouco adiantado em relação ao do
 // servidor, ao registrar uma tentativa "agora" (limite técnico, fora de config/regras.js)
 const TOLERANCIA_RELOGIO_MS = 5 * 60 * 1000;
+
+// Formatos de foto aceitos (seção 6 de seguranca-e-nuvem.md, ck_anexo_manifestacao_tipo_mime),
+// reconhecidos pelos primeiros bytes do arquivo ("assinatura"), e não pela extensão nem pelo
+// tipo que o navegador declara, que qualquer um pode trocar
+const ASSINATURA_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const ASSINATURAS = [
+  {
+    tipoMime: 'image/jpeg',
+    confere: (b) => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  },
+  {
+    tipoMime: 'image/png',
+    confere: (b) => b.length >= 8 && b.subarray(0, 8).equals(ASSINATURA_PNG),
+  },
+  {
+    // "RIFF", 4 bytes de tamanho e "WEBP"
+    tipoMime: 'image/webp',
+    confere: (b) =>
+      b.length >= 12 &&
+      b.toString('latin1', 0, 4) === 'RIFF' &&
+      b.toString('latin1', 8, 12) === 'WEBP',
+  },
+];
+
+function tipoDaImagem(conteudo) {
+  return ASSINATURAS.find(({ confere }) => confere(conteudo))?.tipoMime ?? null;
+}
 
 const naoEncontrada = () =>
   new AppError(404, 'MANIFESTACAO_NAO_ENCONTRADA', 'Manifestação não encontrada.');
@@ -214,7 +242,173 @@ function criarManifestacoesService({
     return detalhar({ id });
   }
 
-  return { listar, listarAlertas, detalhar, classificar, registrarTentativa, finalizar };
+  // Confere as referências do registro de outros canais. Tudo é 422: o corpo está bem formado,
+  // mas aponta para algo que não pode ser usado.
+  async function conferirReferencias({ setorId, etapaId, turnoId, dataOcorrencia }) {
+    const setor = await repo.buscarSetor(setorId);
+    if (!setor) {
+      throw new AppError(422, 'SETOR_INEXISTENTE', 'O setor informado não existe.', [
+        { campo: 'body.setorId', mensagem: 'Setor não encontrado.' },
+      ]);
+    }
+    if (!setor.ativo) {
+      throw new AppError(422, 'SETOR_INATIVO', 'O setor está desativado.', [
+        { campo: 'body.setorId', mensagem: 'Escolha um setor ativo.' },
+      ]);
+    }
+    if (etapaId !== undefined) {
+      // Desde a B8 as etapas são de cada setor: a etapa anotada precisa ser do setor da
+      // manifestação (RF17). Uma etapa que não existe também não é do setor.
+      const etapa = await repo.buscarEtapa(etapaId);
+      if (!etapa || etapa.setorId !== setorId) {
+        throw new AppError(
+          422,
+          'ETAPA_DE_OUTRO_SETOR',
+          'A etapa precisa ser do setor da manifestação.',
+          [{ campo: 'body.etapaId', mensagem: 'Escolha uma etapa do setor informado.' }],
+        );
+      }
+      if (!etapa.ativo) {
+        throw new AppError(422, 'ETAPA_INATIVA', 'A etapa está desativada.', [
+          { campo: 'body.etapaId', mensagem: 'Escolha uma etapa ativa do setor.' },
+        ]);
+      }
+    }
+    if (turnoId !== undefined && !(await repo.buscarTurno(turnoId))?.ativo) {
+      throw new AppError(422, 'TURNO_INDISPONIVEL', 'Escolha um dos turnos ativos.', [
+        { campo: 'body.turnoId', mensagem: 'Turno inexistente ou desativado.' },
+      ]);
+    }
+    if (dataOcorrencia > horaLocal(agora()).data) {
+      throw new AppError(422, 'DATA_FUTURA', 'A data da ocorrência não pode ser depois de hoje.', [
+        { campo: 'body.dataOcorrencia', mensagem: 'Escolha hoje ou um dia anterior.' },
+      ]);
+    }
+  }
+
+  // Manifestação recebida por telefone, presencialmente, por e-mail ou por escrito (RF17), com o
+  // mesmo fluxo de chamado da pesquisa. Quem registra já é a Ouvidoria: o tipo vem definido
+  // (RN12) e a manifestação fica ligada ao usuário logado. O telefone segue as mesmas regras da
+  // pesquisa (prepararTelefone). Registro e log na mesma transação (RNF11).
+  async function registrar(corpo, usuario) {
+    const { origem, tipo, setorId, etapaId, turnoId, dataOcorrencia, telefone, termoId } = corpo;
+    await conferirReferencias(corpo);
+
+    // O que não veio fica vazio no banco (etapa, turno e profissional são opcionais)
+    const registro = { origem, tipo, setorId, etapaId, turnoId, dataOcorrencia };
+    const dados = {
+      ...registro,
+      dataOcorrencia: paraDataBanco(dataOcorrencia),
+      profissionalCitado: corpo.profissionalCitado,
+      texto: corpo.texto || null,
+      registradaPorId: usuario.id,
+    };
+    if (telefone !== undefined) {
+      Object.assign(
+        dados,
+        await prepararTelefone({ telefone, termoId, setorId, momento: agora() }, repo),
+      );
+    }
+
+    const { id } = await prisma.$transaction(async (tx) => {
+      const criada = await repo.criar(dados, tx);
+      // O log guarda o que foi registrado, sem o relato e sem o nome citado (ficam só na
+      // manifestação) e sem o telefone (o auditoriaRepository nunca grava o número nem o hash)
+      await auditoriaRepository.registrar(
+        {
+          usuarioId: usuario.id,
+          acao: 'CRIACAO',
+          entidade: 'manifestacao',
+          entidadeId: criada.id,
+          depois: {
+            ...registro,
+            etapaId: etapaId ?? null,
+            turnoId: turnoId ?? null,
+            pediuRetorno: dados.pediuRetorno ?? false,
+            possivelDuplicata: dados.possivelDuplicata ?? false,
+          },
+        },
+        tx,
+      );
+      return criada;
+    });
+
+    // Nova manifestação muda "Manifestações por tipo" do dashboard (seção 8 da arquitetura)
+    versaoDados.incrementar();
+    return detalhar({ id });
+  }
+
+  // Foto de uma manifestação recebida por escrito (RF17): só no canal PAPEL, com o chamado
+  // aberto, no máximo REGRAS.ANEXOS_POR_MANIFESTACAO fotos. O tamanho (300 KB) já foi conferido
+  // pelo multer na rota e é garantido pelo banco (ck_anexo_manifestacao_tamanho). O formato vem
+  // do conteúdo do arquivo. A foto não muda indicador, então não mexe no versaoDados.
+  async function anexar({ id }, conteudo, usuario) {
+    const tipoMime = tipoDaImagem(conteudo);
+    if (!tipoMime) {
+      throw new AppError(400, 'FOTO_INVALIDA', 'Envie uma foto em JPEG, PNG ou WebP.', [
+        { campo: 'foto', mensagem: 'O conteúdo do arquivo não é uma imagem JPEG, PNG ou WebP.' },
+      ]);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const antes = await repo.buscarSituacao(id, tx);
+      if (!antes) throw naoEncontrada();
+      if (antes.origem !== 'PAPEL') {
+        throw new AppError(
+          422,
+          'ANEXO_SO_PAPEL',
+          'Só uma manifestação recebida por escrito (canal papel) recebe fotos.',
+        );
+      }
+      // Trava o chamado: dois envios ao mesmo tempo não passam juntos do limite
+      if ((await repo.travarAberta(id, tx)) === 0) throw jaFinalizado();
+      if ((await repo.contarAnexos(id, tx)) >= REGRAS.ANEXOS_POR_MANIFESTACAO) {
+        throw new AppError(
+          422,
+          'LIMITE_DE_FOTOS',
+          `Cada manifestação aceita no máximo ${REGRAS.ANEXOS_POR_MANIFESTACAO} fotos.`,
+        );
+      }
+
+      const anexo = await repo.anexarFoto(
+        { manifestacaoId: id, conteudo, tipoMime, enviadoPorId: usuario.id },
+        tx,
+      );
+      // Só os metadados vão para o log, nunca a imagem
+      await auditoriaRepository.registrar(
+        {
+          usuarioId: usuario.id,
+          acao: 'CRIACAO',
+          entidade: 'anexo_manifestacao',
+          entidadeId: anexo.id,
+          depois: anexo,
+        },
+        tx,
+      );
+    });
+
+    return detalhar({ id });
+  }
+
+  // Conteúdo de uma foto, para a rota devolvê-la com o Content-Type gravado
+  async function buscarFoto({ id, anexoId }) {
+    const foto = await repo.buscarFoto(id, anexoId);
+    if (!foto) throw new AppError(404, 'ANEXO_NAO_ENCONTRADO', 'Foto não encontrada.');
+    // O Prisma devolve o BYTEA como Uint8Array; o Express só envia como arquivo um Buffer
+    return { ...foto, conteudo: Buffer.from(foto.conteudo) };
+  }
+
+  return {
+    listar,
+    listarAlertas,
+    detalhar,
+    classificar,
+    registrarTentativa,
+    finalizar,
+    registrar,
+    anexar,
+    buscarFoto,
+  };
 }
 
 module.exports = { criarManifestacoesService };
