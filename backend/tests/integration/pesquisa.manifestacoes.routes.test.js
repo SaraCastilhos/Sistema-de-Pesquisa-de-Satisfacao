@@ -176,6 +176,17 @@ describe('POST /api/publico/sessoes/:id/manifestacoes', () => {
     expect(gravada.texto).toBe('Ótimo atendimento');
   });
 
+  it('CT62 - texto de SQL injection é gravado como texto comum, sem afetar nenhuma tabela', async () => {
+    const sessao = await sessaoDoSetor();
+    const ataque = "'; DROP TABLE sessao; --";
+
+    const resposta = await manifestar(sessao.id, { texto: ataque }).expect(201);
+
+    const gravada = await prisma.manifestacao.findUnique({ where: { id: resposta.body.id } });
+    expect(gravada.texto).toBe(ataque);
+    expect(await prisma.sessao.count()).toBe(1);
+  });
+
   it('CT77 - gravada sem tipo (a classificar) e status NOVA; corpo com tipo = 400', async () => {
     const sessao = await sessaoDoSetor();
 

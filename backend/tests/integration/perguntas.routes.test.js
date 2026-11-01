@@ -63,7 +63,7 @@ describe('GET /api/perguntas', () => {
     expect(resposta.body[0].perguntas.map((p) => p.texto)).toEqual(['Ativa?']);
   });
 
-  it('Gestor vê os seus setores e recebe 403 nos outros', async () => {
+  it('CT40 - Gestor vê os seus setores e recebe 403 nos outros', async () => {
     const outro = await criarSetor();
     const { token } = await criarUsuario({ perfil: 'GESTOR', setorIds: [setor.id] });
     await listar(token, `?setorId=${setor.id}`).expect(200);
