@@ -80,7 +80,11 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
           content:
@@ -128,12 +132,19 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/IndicadoresEquipe'
+              example:
+                - { equipe: { id: 2, nome: Equipe B }, respostas: 48, notaMedia: 9.1 }
+                - { equipe: { id: 1, nome: Equipe A }, respostas: 35, notaMedia: 8.4 }
         '400':
           $ref: '#/components/responses/DadosInvalidos'
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
           content:
@@ -200,7 +211,11 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
           content:
@@ -208,7 +223,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Erro'
         '422':
-          description: Etapa fora do setor (ETAPA_FORA_DO_SETOR) ou exportação grande demais
+          description: >
+            Etapa fora do setor (ETAPA_FORA_DO_SETOR) ou mais de 20000 sessões no arquivo
+            (EXPORTACAO_MUITO_GRANDE)
           content:
             application/json:
               schema:
@@ -245,7 +262,11 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
           content:

@@ -148,6 +148,7 @@ paths:
                   dataAtendimento: { type: string, format: date }
                   turnoId: { type: integer }
                   turnoOrigem: { type: string, enum: [INFORMADO] }
+              example: { dataAtendimento: '2026-10-30', turnoId: 2, turnoOrigem: INFORMADO }
         '400':
           $ref: '#/components/responses/DadosInvalidos'
         '404':
@@ -212,6 +213,7 @@ paths:
                   tipoAtendimento:
                     type: [string, 'null']
                     enum: [SUS, PLANO_DE_SAUDE, PARTICULAR, null]
+              example: { respondente: PACIENTE, tipoAtendimento: SUS }
         '400':
           $ref: '#/components/responses/DadosInvalidos'
         '404':
@@ -268,6 +270,7 @@ paths:
                   perguntaId: { type: integer }
                   pulada: { type: boolean }
                   valor: { type: [integer, 'null'], minimum: 1, maximum: 5 }
+              example: { perguntaId: 1, pulada: false, valor: 4 }
         '400':
           $ref: '#/components/responses/DadosInvalidos'
         '404':
@@ -321,6 +324,7 @@ paths:
                 required: [nota]
                 properties:
                   nota: { type: integer, minimum: 0, maximum: 10 }
+              example: { nota: 9 }
         '400':
           $ref: '#/components/responses/DadosInvalidos'
         '404':
@@ -405,6 +409,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PesquisaManifestacaoCriada'
+              example: { id: 42, protocolo: 42 }
         '400':
           $ref: '#/components/responses/DadosInvalidos'
         '404':
@@ -513,6 +518,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FormularioPapelCriado'
+              example: { id: 9b2f6c1e-4a7d-4e2b-8f3a-1c5d7e9a0b24 }
         '400':
           description: >
             Dados inválidos (DADOS_INVALIDOS): data e dataEstimada juntas ou nenhuma das duas,
