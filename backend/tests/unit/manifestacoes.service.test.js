@@ -2,6 +2,7 @@ const {
   criarManifestacoesService,
 } = require('../../src/modules/manifestacoes/manifestacoes.service');
 const { paraDataBanco } = require('../../src/utils/datas');
+const { hmac, decifrar: decifrarDeVerdade } = require('../../src/utils/cripto');
 
 // Testes unitários: nenhum banco envolvido. O repository e a decifragem são falsos, e o relógio
 // ("agora") é fixo: quarta-feira, 28/10/2026, 12h em São Paulo.
@@ -62,6 +63,7 @@ function montar({
   chamado = situacao(),
   semSucesso = 0,
   atualizadas = 1,
+  anexos = 0,
 } = {}) {
   const tx = { nome: 'transação' };
   const manifestacoesRepository = {
@@ -77,6 +79,22 @@ function montar({
     marcarEmContato: jest.fn().mockResolvedValue(atualizadas),
     criarTentativa: jest.fn().mockResolvedValue({ id: 30 }),
     finalizar: jest.fn().mockResolvedValue(atualizadas),
+    // Registro de outros canais e fotos (RF17)
+    buscarSetor: jest.fn().mockResolvedValue({ id: 1, ativo: true }),
+    buscarEtapa: jest.fn().mockResolvedValue({ id: 5, setorId: 1, ativo: true }),
+    buscarTurno: jest.fn().mockResolvedValue({ id: 2, ativo: true }),
+    buscarTermoVigente: jest.fn().mockResolvedValue({ id: 3, versao: 2 }),
+    existeDuplicata: jest.fn().mockResolvedValue(false),
+    criar: jest.fn().mockResolvedValue({ id: 7 }),
+    travarAberta: jest.fn().mockResolvedValue(atualizadas),
+    contarAnexos: jest.fn().mockResolvedValue(anexos),
+    anexarFoto: jest.fn().mockResolvedValue({
+      id: 11,
+      manifestacaoId: 7,
+      tipoMime: 'image/png',
+      tamanhoBytes: 12,
+    }),
+    buscarFoto: jest.fn().mockResolvedValue(null),
   };
   const auditoriaRepository = { registrar: jest.fn().mockResolvedValue({}) };
   // A transação falsa só chama a função com o "tx", como o Prisma faz
@@ -456,5 +474,256 @@ describe('manifestacoesService.finalizar', () => {
       codigo: 'CHAMADO_JA_FINALIZADO',
     });
     expect(corrida.auditoriaRepository.registrar).not.toHaveBeenCalled();
+  });
+});
+
+describe('manifestacoesService.registrar', () => {
+  const corpo = (dados = {}) => ({
+    origem: 'TELEFONE',
+    tipo: 'RECLAMACAO',
+    setorId: 1,
+    dataOcorrencia: '2026-10-27',
+    texto: 'Ligou para reclamar da espera.',
+    ...dados,
+  });
+
+  it('CT32 - grava com quem registrou, a data como DATE, o log CRIACAO e avisa o cache', async () => {
+    const { service, manifestacoesRepository, auditoriaRepository, versaoDados, tx } = montar({
+      detalhe: detalheDoBanco(),
+    });
+
+    await service.registrar(
+      corpo({ etapaId: 5, turnoId: 2, profissionalCitado: 'Dr. X' }),
+      superAdmin,
+    );
+
+    expect(manifestacoesRepository.criar).toHaveBeenCalledWith(
+      {
+        origem: 'TELEFONE',
+        tipo: 'RECLAMACAO',
+        setorId: 1,
+        etapaId: 5,
+        turnoId: 2,
+        dataOcorrencia: paraDataBanco('2026-10-27'),
+        profissionalCitado: 'Dr. X',
+        texto: 'Ligou para reclamar da espera.',
+        registradaPorId: superAdmin.id,
+      },
+      tx,
+    );
+    expect(auditoriaRepository.registrar).toHaveBeenCalledWith(
+      {
+        usuarioId: superAdmin.id,
+        acao: 'CRIACAO',
+        entidade: 'manifestacao',
+        entidadeId: 7,
+        depois: {
+          origem: 'TELEFONE',
+          tipo: 'RECLAMACAO',
+          setorId: 1,
+          etapaId: 5,
+          turnoId: 2,
+          dataOcorrencia: '2026-10-27',
+          pediuRetorno: false,
+          possivelDuplicata: false,
+        },
+      },
+      tx,
+    );
+    expect(versaoDados.incrementar).toHaveBeenCalledTimes(1);
+    expect(manifestacoesRepository.buscarDetalhe).toHaveBeenCalledWith(7);
+  });
+
+  it('com telefone: as mesmas regras da pesquisa (normaliza, cifra, hash, termo e duplicata)', async () => {
+    const { service, manifestacoesRepository } = montar({ detalhe: detalheDoBanco() });
+    manifestacoesRepository.existeDuplicata.mockResolvedValue(true);
+
+    await service.registrar(
+      corpo({ telefone: '(51) 99999-9999', aceiteTermos: true, termoId: 3 }),
+      superAdmin,
+    );
+
+    expect(manifestacoesRepository.existeDuplicata).toHaveBeenCalledWith({
+      telefoneHash: hmac('5551999999999'),
+      setorId: 1,
+      desde: new Date(AGORA.getTime() - 24 * HORA),
+    });
+    const dados = manifestacoesRepository.criar.mock.calls[0][0];
+    expect(dados).toMatchObject({
+      telefoneHash: hmac('5551999999999'),
+      pediuRetorno: true,
+      termoPrivacidadeId: 3,
+      consentimentoEm: AGORA,
+      possivelDuplicata: true,
+    });
+    expect(decifrarDeVerdade(dados.telefoneCifrado)).toBe('5551999999999');
+    // Campos da requisição que não são colunas não chegam ao banco
+    expect(dados).not.toHaveProperty('telefone');
+    expect(dados).not.toHaveProperty('aceiteTermos');
+    expect(dados).not.toHaveProperty('termoId');
+  });
+
+  it('termos que não são os vigentes = 409, sem gravar', async () => {
+    const { service, manifestacoesRepository, versaoDados } = montar();
+    await expect(
+      service.registrar(
+        corpo({ telefone: '51999999999', aceiteTermos: true, termoId: 1 }),
+        superAdmin,
+      ),
+    ).rejects.toMatchObject({ status: 409, codigo: 'TERMO_DESATUALIZADO' });
+    expect(manifestacoesRepository.criar).not.toHaveBeenCalled();
+    expect(versaoDados.incrementar).not.toHaveBeenCalled();
+  });
+
+  it('referências inválidas = 422 com o código de cada caso, sem gravar', async () => {
+    const casos = [
+      [(repo) => repo.buscarSetor.mockResolvedValue(null), {}, 'SETOR_INEXISTENTE'],
+      [(repo) => repo.buscarSetor.mockResolvedValue({ id: 1, ativo: false }), {}, 'SETOR_INATIVO'],
+      [(repo) => repo.buscarEtapa.mockResolvedValue(null), { etapaId: 5 }, 'ETAPA_DE_OUTRO_SETOR'],
+      [
+        (repo) => repo.buscarEtapa.mockResolvedValue({ id: 5, setorId: 9, ativo: true }),
+        { etapaId: 5 },
+        'ETAPA_DE_OUTRO_SETOR',
+      ],
+      [
+        (repo) => repo.buscarEtapa.mockResolvedValue({ id: 5, setorId: 1, ativo: false }),
+        { etapaId: 5 },
+        'ETAPA_INATIVA',
+      ],
+      [(repo) => repo.buscarTurno.mockResolvedValue(null), { turnoId: 2 }, 'TURNO_INDISPONIVEL'],
+      [
+        (repo) => repo.buscarTurno.mockResolvedValue({ id: 2, ativo: false }),
+        { turnoId: 2 },
+        'TURNO_INDISPONIVEL',
+      ],
+      // AGORA é 28/10/2026
+      [() => {}, { dataOcorrencia: '2026-10-29' }, 'DATA_FUTURA'],
+    ];
+    for (const [preparar, dados, codigo] of casos) {
+      const { service, manifestacoesRepository } = montar();
+      preparar(manifestacoesRepository);
+      await expect(service.registrar(corpo(dados), superAdmin)).rejects.toMatchObject({
+        status: 422,
+        codigo,
+      });
+      expect(manifestacoesRepository.criar).not.toHaveBeenCalled();
+    }
+  });
+
+  it('etapa e turno não informados não são consultados; hoje é aceito', async () => {
+    const { service, manifestacoesRepository } = montar({ detalhe: detalheDoBanco() });
+    await service.registrar(corpo({ dataOcorrencia: '2026-10-28' }), superAdmin);
+    expect(manifestacoesRepository.buscarEtapa).not.toHaveBeenCalled();
+    expect(manifestacoesRepository.buscarTurno).not.toHaveBeenCalled();
+    expect(manifestacoesRepository.criar).toHaveBeenCalled();
+  });
+});
+
+describe('manifestacoesService.anexar', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0, 0]);
+  const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP')]);
+  const papel = situacao({ origem: 'PAPEL', pediuRetorno: false });
+
+  it('CT33 - reconhece JPEG, PNG e WebP pelos primeiros bytes e grava com o log', async () => {
+    for (const [conteudo, tipoMime] of [
+      [PNG, 'image/png'],
+      [JPEG, 'image/jpeg'],
+      [WEBP, 'image/webp'],
+    ]) {
+      const { service, manifestacoesRepository, auditoriaRepository, tx } = montar({
+        chamado: papel,
+        detalhe: detalheDoBanco(),
+      });
+      await service.anexar({ id: 7 }, conteudo, superAdmin);
+
+      expect(manifestacoesRepository.anexarFoto).toHaveBeenCalledWith(
+        { manifestacaoId: 7, conteudo, tipoMime, enviadoPorId: superAdmin.id },
+        tx,
+      );
+      expect(auditoriaRepository.registrar).toHaveBeenCalledWith(
+        {
+          usuarioId: superAdmin.id,
+          acao: 'CRIACAO',
+          entidade: 'anexo_manifestacao',
+          entidadeId: 11,
+          depois: { id: 11, manifestacaoId: 7, tipoMime: 'image/png', tamanhoBytes: 12 },
+        },
+        tx,
+      );
+    }
+  });
+
+  it('conteúdo que não é JPEG, PNG nem WebP = 400 FOTO_INVALIDA, sem abrir transação', async () => {
+    for (const conteudo of [
+      Buffer.from('%PDF-1.7'),
+      Buffer.from('GIF89a'),
+      Buffer.from('texto qualquer'),
+      Buffer.from([0x89, 0x50]),
+      Buffer.alloc(0),
+    ]) {
+      const { service, manifestacoesRepository } = montar({ chamado: papel });
+      await expect(service.anexar({ id: 7 }, conteudo, superAdmin)).rejects.toMatchObject({
+        status: 400,
+        codigo: 'FOTO_INVALIDA',
+      });
+      expect(manifestacoesRepository.buscarSituacao).not.toHaveBeenCalled();
+    }
+  });
+
+  it('inexistente = 404, outro canal = 422, finalizado = 409, já com 3 fotos = 422', async () => {
+    const casos = [
+      [{ chamado: null }, 404, 'MANIFESTACAO_NAO_ENCONTRADA'],
+      [{ chamado: situacao({ origem: 'EMAIL' }) }, 422, 'ANEXO_SO_PAPEL'],
+      [{ chamado: situacao({ origem: 'PESQUISA' }) }, 422, 'ANEXO_SO_PAPEL'],
+      // travarAberta devolve 0 quando o chamado já não está aberto
+      [{ chamado: papel, atualizadas: 0 }, 409, 'CHAMADO_JA_FINALIZADO'],
+      [{ chamado: papel, anexos: 3 }, 422, 'LIMITE_DE_FOTOS'],
+    ];
+    for (const [opcoes, status, codigo] of casos) {
+      const { service, manifestacoesRepository, auditoriaRepository } = montar(opcoes);
+      await expect(service.anexar({ id: 7 }, PNG, superAdmin)).rejects.toMatchObject({
+        status,
+        codigo,
+      });
+      expect(manifestacoesRepository.anexarFoto).not.toHaveBeenCalled();
+      expect(auditoriaRepository.registrar).not.toHaveBeenCalled();
+    }
+  });
+
+  it('com 2 fotos aceita a 3ª; a foto não muda indicador (sem versaoDados)', async () => {
+    const { service, manifestacoesRepository, versaoDados } = montar({
+      chamado: papel,
+      anexos: 2,
+      detalhe: detalheDoBanco(),
+    });
+    await service.anexar({ id: 7 }, PNG, superAdmin);
+    expect(manifestacoesRepository.anexarFoto).toHaveBeenCalled();
+    expect(versaoDados.incrementar).not.toHaveBeenCalled();
+  });
+});
+
+describe('manifestacoesService.buscarFoto', () => {
+  it('devolve o conteúdo como Buffer, para o Express enviar como arquivo', async () => {
+    const { service, manifestacoesRepository } = montar();
+    manifestacoesRepository.buscarFoto.mockResolvedValue({
+      id: 11,
+      conteudo: new Uint8Array([1, 2, 3]),
+      tipoMime: 'image/png',
+      tamanhoBytes: 3,
+    });
+
+    const foto = await service.buscarFoto({ id: 7, anexoId: 11 });
+    expect(manifestacoesRepository.buscarFoto).toHaveBeenCalledWith(7, 11);
+    expect(Buffer.isBuffer(foto.conteudo)).toBe(true);
+    expect([...foto.conteudo]).toEqual([1, 2, 3]);
+  });
+
+  it('inexistente ou de outra manifestação = 404 ANEXO_NAO_ENCONTRADO', async () => {
+    const { service } = montar();
+    await expect(service.buscarFoto({ id: 7, anexoId: 11 })).rejects.toMatchObject({
+      status: 404,
+      codigo: 'ANEXO_NAO_ENCONTRADO',
+    });
   });
 });
