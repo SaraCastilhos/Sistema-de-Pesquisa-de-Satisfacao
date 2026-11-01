@@ -87,7 +87,6 @@ jobs:
       - name: Cria o banco de teste
         run: npx prisma migrate deploy
 
-      # O limite de 60% de cobertura dos services (RNF13) ainda NÃO bloqueia: ele está comentado
-      # no jest.config.js e será ligado na etapa de fechamento (BF), quando os services existirem.
+      # Falha se algum service ficar abaixo de 60% de cobertura (RNF13; limite no jest.config.js)
       - name: Roda os testes com cobertura
         run: npm run test:coverage
