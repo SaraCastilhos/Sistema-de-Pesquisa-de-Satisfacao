@@ -4,6 +4,11 @@ tags:
     description: >
       Pesquisa pública do paciente, sem login (RF01–RF10, RF13, RF32). Leituras com até 300
       consultas por minuto por IP; gravações com até 60 envios por minuto por IP (RNF08).
+  - name: Formulários de papel
+    description: >
+      Digitação, conferência, correção e exclusão dos formulários de pesquisa em papel pela
+      Ouvidoria (RF33). Só o Super Admin. Cada formulário é uma sessão de canal PAPEL, com as mesmas
+      regras de pergunta e de rostinho da pesquisa.
 paths:
   /api/publico/pesquisas/{slug}:
     get:
@@ -418,6 +423,249 @@ paths:
                 $ref: '#/components/schemas/Erro'
         '429':
           $ref: '#/components/responses/LimiteExcedido'
+  /api/formularios-papel:
+    get:
+      tags: [Formulários de papel]
+      summary: Lista os formulários de papel digitados (só Super Admin)
+      description: >
+        Lista paginada das sessões de canal PAPEL, da digitação mais recente para a mais antiga,
+        para a Ouvidoria conferir o que já digitou e não digitar o mesmo papel duas vezes. Traz o
+        setor, a data do atendimento e a sua origem (INFORMADO = escrita no papel; ESTIMADO = data de
+        recolhimento), o turno (null = em branco no papel), quem respondeu, o tipo de atendimento, a
+        nota, o número de rostinhos e quem digitou e quando (do log de auditoria). Sessões de
+        celular e de tablet não aparecem.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pagina
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: tamanho
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: setorId
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - name: inicio
+          in: query
+          required: false
+          description: Primeiro dia do período, pela data do atendimento (incluído)
+          schema: { type: string, format: date, examples: ['2026-10-01'] }
+        - name: fim
+          in: query
+          required: false
+          description: Último dia do período, pela data do atendimento (incluído)
+          schema: { type: string, format: date, examples: ['2026-10-31'] }
+      responses:
+        '200':
+          description: Página de formulários
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormularioPapelPagina'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+    post:
+      tags: [Formulários de papel]
+      summary: Digita um formulário de papel (só Super Admin)
+      description: >
+        Cria UMA sessão de canal PAPEL com as respostas, numa transação, e grava o log CRIACAO com o
+        usuário logado (RF33, RNF11, D19). A data escrita no papel vai em "data" (origem INFORMADO);
+        sem ela, a data em que a Ouvidoria recolheu o formulário vai em "dataEstimada" (origem
+        ESTIMADO): exatamente uma das duas, nenhuma futura (RN03). Turno em branco no papel = sessão
+        sem turno. Só os itens marcados vêm em "respostas", cada um com uma pergunta ativa, de etapa
+        ativa e do setor do formulário, sem repetir (as mesmas regras da pesquisa); o que ficou em
+        branco não vem. A lista pode vir vazia se o papel só tiver a nota. Sem a nota, a sessão
+        fica incompleta (RN01).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormularioPapelEntrada'
+            examples:
+              completo:
+                summary: Com data, turno, cabeçalho, rostinhos e nota
+                value:
+                  setorId: 1
+                  data: '2026-10-28'
+                  turnoId: 1
+                  respondente: PACIENTE
+                  tipoAtendimento: SUS
+                  respostas: [{ perguntaId: 1, valor: 5 }, { perguntaId: 2, valor: 4 }]
+                  nota: 9
+              semDataSemTurno:
+                summary: Sem data e sem turno no papel, só com a nota
+                value: { setorId: 1, dataEstimada: '2026-10-30', respostas: [], nota: 7 }
+      responses:
+        '201':
+          description: Formulário digitado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormularioPapelCriado'
+        '400':
+          description: >
+            Dados inválidos (DADOS_INVALIDOS): data e dataEstimada juntas ou nenhuma das duas,
+            pergunta repetida, rostinho fora de 1 a 5, nota fora de 0 a 10, papel sem rostinho e sem
+            nota, campo desconhecido. Data futura (DATA_FUTURA).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '422':
+          description: >
+            Setor inexistente (SETOR_INEXISTENTE) ou desativado (SETOR_INATIVO), turno inexistente
+            ou desativado (TURNO_INDISPONIVEL), pergunta inexistente, desativada, de etapa
+            desativada ou de outro setor (PERGUNTA_INDISPONIVEL)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/formularios-papel/{id}:
+    get:
+      tags: [Formulários de papel]
+      summary: Um formulário de papel com as respostas (só Super Admin)
+      description: >
+        O formulário digitado, com os rostinhos, para a tela de conferência e de correção. Uma
+        sessão de celular ou de tablet não é encontrada por esta rota.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID)
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Formulário
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormularioPapelDetalhe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Inexistente ou de celular ou tablet (FORMULARIO_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+    put:
+      tags: [Formulários de papel]
+      summary: Corrige um formulário de papel inteiro (só Super Admin)
+      description: >
+        Para o sistema ficar igual ao papel (RF33). O corpo é o mesmo da digitação, com as mesmas
+        validações, e substitui tudo: a sessão (inclusive o setor) é atualizada e as respostas
+        antigas são trocadas pelas novas, numa transação. O log ALTERACAO guarda o estado anterior e
+        o novo completos, com a sessão e as respostas (RNF11). Só sessões de canal PAPEL: as
+        respostas de celular e de tablet nunca são alteradas (RN01), e a rota responde 404 para
+        elas.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID)
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormularioPapelEntrada'
+            examples:
+              corrigirNota:
+                summary: Mesmo papel, com a nota corrigida
+                value:
+                  setorId: 1
+                  data: '2026-10-28'
+                  turnoId: 1
+                  respondente: PACIENTE
+                  tipoAtendimento: SUS
+                  respostas: [{ perguntaId: 1, valor: 5 }, { perguntaId: 2, valor: 4 }]
+                  nota: 8
+              semDataSemTurno:
+                summary: Papel sem data (vale a de recolhimento) e sem turno
+                value: { setorId: 1, dataEstimada: '2026-10-30', respostas: [], nota: 7 }
+      responses:
+        '200':
+          description: Formulário corrigido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormularioPapelDetalhe'
+        '400':
+          description: Os mesmos casos da digitação (DADOS_INVALIDOS ou DATA_FUTURA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Inexistente ou de celular ou tablet (FORMULARIO_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: Os mesmos casos da digitação (setor, turno ou pergunta)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+    delete:
+      tags: [Formulários de papel]
+      summary: Exclui um formulário de papel (só Super Admin)
+      description: >
+        Para um formulário digitado duas vezes ou por engano (RF33). Numa transação, o log EXCLUSAO
+        recebe a sessão e todas as respostas, e depois as respostas e a sessão são apagadas (RN01,
+        RNF11, D19). Só sessões de canal PAPEL: uma sessão de celular ou de tablet recebe 404.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Código da sessão (UUID)
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Formulário excluído
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Inexistente ou de celular ou tablet (FORMULARIO_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
 components:
   schemas:
     PesquisaDoSetor:
@@ -554,3 +802,140 @@ components:
       properties:
         id: { type: integer }
         protocolo: { type: integer, description: Número de protocolo (o próprio id) }
+    FormularioPapelReferencia:
+      type: object
+      required: [id, nome]
+      properties:
+        id: { type: integer, examples: [1] }
+        nome: { type: string, examples: [Pronto Atendimento] }
+    FormularioPapelEntrada:
+      type: object
+      additionalProperties: false
+      required: [setorId, respostas]
+      description: >
+        Exatamente uma das datas: "data" (escrita no papel) ou "dataEstimada" (data de recolhimento,
+        quando o papel não tem data). Pelo menos um rostinho ou a nota.
+      properties:
+        setorId: { type: integer, minimum: 1, description: O serviço principal marcado no papel }
+        data: { type: string, format: date, description: 'AAAA-MM-DD, hoje ou antes' }
+        dataEstimada: { type: string, format: date, description: 'AAAA-MM-DD, hoje ou antes' }
+        turnoId: { type: integer, minimum: 1, description: Sem ele, a sessão fica sem turno }
+        respondente: { type: string, enum: [PACIENTE, FAMILIAR] }
+        tipoAtendimento: { type: string, enum: [SUS, PLANO_DE_SAUDE, PARTICULAR] }
+        respostas:
+          type: array
+          maxItems: 100
+          description: Só os itens marcados no papel, sem repetir pergunta
+          items:
+            type: object
+            additionalProperties: false
+            required: [perguntaId, valor]
+            properties:
+              perguntaId: { type: integer, minimum: 1 }
+              valor: { type: integer, minimum: 1, maximum: 5 }
+        nota: { type: integer, minimum: 0, maximum: 10 }
+    FormularioPapelCriado:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid, description: Código da sessão }
+    FormularioPapelItem:
+      type: object
+      required:
+        - id
+        - setor
+        - dataAtendimento
+        - turnoOrigem
+        - turno
+        - respondente
+        - tipoAtendimento
+        - nota
+        - totalRespostas
+        - digitadoEm
+        - digitadoPor
+      properties:
+        id: { type: string, format: uuid }
+        setor:
+          $ref: '#/components/schemas/FormularioPapelReferencia'
+        dataAtendimento: { type: string, format: date, examples: ['2026-10-28'] }
+        turnoOrigem:
+          type: string
+          enum: [INFORMADO, ESTIMADO]
+          description: INFORMADO = data escrita no papel; ESTIMADO = data de recolhimento
+        turno:
+          description: null = turno em branco no papel
+          oneOf:
+            - $ref: '#/components/schemas/FormularioPapelReferencia'
+            - type: 'null'
+        respondente: { type: [string, 'null'], enum: [PACIENTE, FAMILIAR, null] }
+        tipoAtendimento:
+          type: [string, 'null']
+          enum: [SUS, PLANO_DE_SAUDE, PARTICULAR, null]
+        nota: { type: [integer, 'null'], description: null = papel sem a nota (incompleto) }
+        totalRespostas: { type: integer, description: Número de rostinhos digitados }
+        digitadoEm: { type: string, format: date-time }
+        digitadoPor:
+          description: Do log de auditoria; null se o formulário não tem o log da digitação
+          oneOf:
+            - $ref: '#/components/schemas/FormularioPapelReferencia'
+            - type: 'null'
+    FormularioPapelPagina:
+      type: object
+      required: [itens, total, pagina, tamanho]
+      properties:
+        itens:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormularioPapelItem'
+        total: { type: integer }
+        pagina: { type: integer }
+        tamanho: { type: integer }
+    FormularioPapelDetalhe:
+      type: object
+      required:
+        - id
+        - setor
+        - dataAtendimento
+        - turnoOrigem
+        - turno
+        - respondente
+        - tipoAtendimento
+        - nota
+        - iniciadaEm
+        - concluidaEm
+        - respostas
+        - digitadoEm
+        - digitadoPor
+      properties:
+        id: { type: string, format: uuid }
+        setor:
+          $ref: '#/components/schemas/FormularioPapelReferencia'
+        dataAtendimento: { type: string, format: date }
+        turnoOrigem: { type: string, enum: [INFORMADO, ESTIMADO] }
+        turno:
+          oneOf:
+            - $ref: '#/components/schemas/FormularioPapelReferencia'
+            - type: 'null'
+        respondente: { type: [string, 'null'], enum: [PACIENTE, FAMILIAR, null] }
+        tipoAtendimento:
+          type: [string, 'null']
+          enum: [SUS, PLANO_DE_SAUDE, PARTICULAR, null]
+        nota: { type: [integer, 'null'] }
+        iniciadaEm: { type: string, format: date-time, description: Momento da digitação }
+        concluidaEm:
+          type: [string, 'null']
+          format: date-time
+          description: Quando a nota entrou; null sem a nota
+        respostas:
+          type: array
+          items:
+            type: object
+            required: [perguntaId, valor]
+            properties:
+              perguntaId: { type: integer }
+              valor: { type: integer, minimum: 1, maximum: 5 }
+        digitadoEm: { type: string, format: date-time }
+        digitadoPor:
+          oneOf:
+            - $ref: '#/components/schemas/FormularioPapelReferencia'
+            - type: 'null'

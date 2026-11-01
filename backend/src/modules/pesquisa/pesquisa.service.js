@@ -25,6 +25,15 @@ function perguntaDisponivel(pergunta, etapa, setorId) {
   return Boolean(pergunta?.ativa && etapa?.ativo && etapa.setorId === setorId);
 }
 
+// O mesmo erro na pesquisa e no formulário de papel (campo: onde está o perguntaId no corpo)
+const perguntaIndisponivel = (campo = 'body.perguntaId') =>
+  new AppError(
+    422,
+    'PERGUNTA_INDISPONIVEL',
+    'Esta pergunta não faz parte da pesquisa deste setor.',
+    [{ campo, mensagem: 'Pergunta inexistente, desativada ou de outro setor.' }],
+  );
+
 // O banco guarda a data como DATE e a hora como TIME; a API usa 'AAAA-MM-DD' e 'HH:MM'
 function formatarSessao(sessao) {
   return {
@@ -198,17 +207,7 @@ function criarPesquisaService({ pesquisaRepository: repo, versaoDados, agora = (
 
     const pergunta = await repo.buscarPergunta(perguntaId);
     if (!perguntaDisponivel(pergunta, pergunta?.etapa, sessao.setorId)) {
-      throw new AppError(
-        422,
-        'PERGUNTA_INDISPONIVEL',
-        'Esta pergunta não faz parte da pesquisa deste setor.',
-        [
-          {
-            campo: 'body.perguntaId',
-            mensagem: 'Pergunta inexistente, desativada ou de outro setor.',
-          },
-        ],
-      );
+      throw perguntaIndisponivel();
     }
 
     const resposta = await repo.gravarResposta({
@@ -321,4 +320,4 @@ function criarPesquisaService({ pesquisaRepository: repo, versaoDados, agora = (
   };
 }
 
-module.exports = { criarPesquisaService, perguntaDisponivel };
+module.exports = { criarPesquisaService, perguntaDisponivel, perguntaIndisponivel };

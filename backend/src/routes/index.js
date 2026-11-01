@@ -9,6 +9,8 @@ const rotas = Router();
 rotas.use('/api/auth', require('../modules/auth/auth.routes'));
 rotas.use('/api/publico/tv-wall', require('../modules/tvwall/tvwall.routes'));
 rotas.use('/api/publico', require('../modules/pesquisa/pesquisa.routes'));
+// Formulário de papel digitado pela Ouvidoria (RF33): segundo router do módulo pesquisa
+rotas.use('/api/formularios-papel', require('../modules/pesquisa/pesquisa.papel.routes'));
 rotas.use('/api/setores', require('../modules/setores/setores.routes'));
 rotas.use('/api/etapas', require('../modules/etapas/etapas.routes'));
 rotas.use('/api/turnos', require('../modules/turnos/turnos.routes'));
