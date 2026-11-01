@@ -35,6 +35,23 @@ const alertas = (token = tokenSuperAdmin) =>
   comToken(request(app).get('/api/manifestacoes/alertas'), token);
 const detalhar = (id, token = tokenSuperAdmin) =>
   comToken(request(app).get(`/api/manifestacoes/${id}`), token);
+const classificar = (id, corpo, token = tokenSuperAdmin) =>
+  comToken(request(app).put(`/api/manifestacoes/${id}/tipo`), token).send(corpo);
+const registrarTentativa = (id, corpo, token = tokenSuperAdmin) =>
+  comToken(request(app).post(`/api/manifestacoes/${id}/tentativas`), token).send({
+    realizadaEm: '2026-10-30T14:00:00-03:00',
+    resultado: 'SEM_SUCESSO',
+    ...corpo,
+  });
+const finalizar = (id, corpo, token = tokenSuperAdmin) =>
+  comToken(request(app).post(`/api/manifestacoes/${id}/finalizacao`), token).send(corpo);
+
+// Linhas do log de uma manifestação, na ordem em que foram gravadas
+const logDe = (id) =>
+  prisma.logAuditoria.findMany({
+    where: { entidade: 'manifestacao', entidadeId: String(id) },
+    orderBy: { id: 'asc' },
+  });
 
 // Manifestação da pesquisa (com sessão) ou de outro canal. comTelefone grava o número cifrado,
 // o hash, o aceite e pediuRetorno, como a B11.
@@ -208,6 +225,19 @@ describe('GET /api/manifestacoes/alertas', () => {
 
     expect((await alertas().expect(200)).body).toEqual([]);
   });
+
+  it('CT31 - depois da primeira tentativa de contato, sai do alerta', async () => {
+    const atrasada = await criarManifestacao({
+      comTelefone: true,
+      tipo: 'RECLAMACAO',
+      criadoEm: new Date(Date.now() - 10 * DIA),
+    });
+    expect((await alertas().expect(200)).body.map((item) => item.id)).toEqual([atrasada.id]);
+
+    await registrarTentativa(atrasada.id, {}).expect(201);
+
+    expect((await alertas().expect(200)).body).toEqual([]);
+  });
 });
 
 describe('GET /api/manifestacoes/:id', () => {
@@ -288,22 +318,301 @@ describe('GET /api/manifestacoes/:id', () => {
   });
 });
 
+describe('PUT /api/manifestacoes/:id/tipo', () => {
+  it('CT78 - classifica, corrige com log do tipo anterior e do novo, e nunca deixa sem tipo', async () => {
+    const manifestacao = await criarManifestacao();
+
+    const classificada = await classificar(manifestacao.id, { tipo: 'RECLAMACAO' }).expect(200);
+    expect(classificada.body).toMatchObject({ id: manifestacao.id, tipo: 'RECLAMACAO' });
+    await classificar(manifestacao.id, { tipo: 'SUGESTAO' }).expect(200);
+
+    // Sem tipo, tipo nulo e A_CLASSIFICAR (que só existe como filtro) = 400
+    for (const corpo of [{}, { tipo: null }, { tipo: 'A_CLASSIFICAR' }]) {
+      await classificar(manifestacao.id, corpo).expect(400);
+    }
+
+    const gravada = await prisma.manifestacao.findUnique({ where: { id: manifestacao.id } });
+    expect(gravada.tipo).toBe('SUGESTAO');
+    const log = await logDe(manifestacao.id);
+    expect(
+      log.map(({ acao, dadosAnteriores, dadosNovos }) => [acao, dadosAnteriores, dadosNovos]),
+    ).toEqual([
+      ['ALTERACAO', { tipo: null }, { tipo: 'RECLAMACAO' }],
+      ['ALTERACAO', { tipo: 'RECLAMACAO' }, { tipo: 'SUGESTAO' }],
+    ]);
+  });
+
+  it('CT49 - a alteração da manifestação fica no log com o usuário, a ação e a data', async () => {
+    const manifestacao = await criarManifestacao();
+    const antes = new Date();
+    await classificar(manifestacao.id, { tipo: 'ELOGIO' }).expect(200);
+
+    const [linha] = await logDe(manifestacao.id);
+    expect(linha).toMatchObject({ usuarioId: superAdmin.id, acao: 'ALTERACAO' });
+    expect(linha.criadoEm.getTime()).toBeGreaterThanOrEqual(antes.getTime() - 1000);
+  });
+
+  it('o mesmo tipo de novo não grava log; inexistente = 404', async () => {
+    const manifestacao = await criarManifestacao({ tipo: 'ELOGIO' });
+    await classificar(manifestacao.id, { tipo: 'ELOGIO' }).expect(200);
+    expect(await logDe(manifestacao.id)).toEqual([]);
+
+    const resposta = await classificar(999999, { tipo: 'ELOGIO' }).expect(404);
+    expect(resposta.body.erro.codigo).toBe('MANIFESTACAO_NAO_ENCONTRADA');
+  });
+});
+
+describe('POST /api/manifestacoes/:id/tentativas', () => {
+  it('CT25 - a primeira tentativa é gravada com o usuário logado e muda NOVA para EM_CONTATO', async () => {
+    const manifestacao = await criarManifestacao({ comTelefone: true });
+
+    const resposta = await registrarTentativa(manifestacao.id, {
+      resultado: 'SEM_SUCESSO',
+      observacao: '<b>Caixa postal.</b>',
+    }).expect(201);
+
+    expect(resposta.body).toMatchObject({
+      status: 'EM_CONTATO',
+      tentativasContato: 1,
+      telefone: TELEFONE,
+      tentativas: [
+        {
+          realizadaEm: '2026-10-30T17:00:00.000Z',
+          resultado: 'SEM_SUCESSO',
+          // Sem HTML (RNF09)
+          observacao: 'Caixa postal.',
+          usuario: { id: superAdmin.id, nome: 'Ouvidoria' },
+        },
+      ],
+    });
+    const log = await logDe(manifestacao.id);
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatchObject({
+      acao: 'ALTERACAO',
+      dadosAnteriores: { status: 'NOVA' },
+      dadosNovos: { status: 'EM_CONTATO' },
+    });
+  });
+
+  it('a segunda tentativa só entra no histórico; observação vazia vira null', async () => {
+    const manifestacao = await criarManifestacao({ comTelefone: true });
+    await registrarTentativa(manifestacao.id, {}).expect(201);
+    const resposta = await registrarTentativa(manifestacao.id, {
+      resultado: 'CONTATO_REALIZADO',
+      observacao: '   ',
+    }).expect(201);
+
+    expect(resposta.body.status).toBe('EM_CONTATO');
+    expect(resposta.body.tentativas).toHaveLength(2);
+    expect(resposta.body.tentativas[1].observacao).toBeNull();
+    expect(await logDe(manifestacao.id)).toHaveLength(1);
+  });
+
+  it('chamado anônimo = 422 e chamado finalizado = 409, sem gravar tentativa', async () => {
+    const anonima = await criarManifestacao();
+    const semTelefone = await registrarTentativa(anonima.id, {}).expect(422);
+    expect(semTelefone.body.erro.codigo).toBe('CHAMADO_SEM_TELEFONE');
+
+    const finalizada = await criarManifestacao({
+      tipo: 'ELOGIO',
+      status: 'ENCERRADA',
+      desfecho: 'Agradecimento enviado ao setor.',
+      finalizadaEm: new Date(),
+    });
+    const fechado = await registrarTentativa(finalizada.id, {}).expect(409);
+    expect(fechado.body.erro.codigo).toBe('CHAMADO_JA_FINALIZADO');
+
+    expect(await prisma.tentativaContato.count()).toBe(0);
+  });
+
+  it('dados inválidos = 400, data no futuro = 422 e inexistente = 404', async () => {
+    const manifestacao = await criarManifestacao({ comTelefone: true });
+    for (const corpo of [
+      { realizadaEm: '2026-10-30' },
+      { realizadaEm: '2026-10-30T14:00:00' },
+      { resultado: 'OCUPADO' },
+      { usuarioId: 99 },
+    ]) {
+      await registrarTentativa(manifestacao.id, corpo).expect(400);
+    }
+
+    const futura = await registrarTentativa(manifestacao.id, {
+      realizadaEm: new Date(Date.now() + DIA).toISOString(),
+    }).expect(422);
+    expect(futura.body.erro.codigo).toBe('DATA_FUTURA');
+
+    await registrarTentativa(999999, {}).expect(404);
+    expect(await prisma.tentativaContato.count()).toBe(0);
+  });
+});
+
+describe('POST /api/manifestacoes/:id/finalizacao', () => {
+  // Chamado com telefone, já classificado, com n tentativas sem sucesso
+  async function chamadoComTentativas(n) {
+    const manifestacao = await criarManifestacao({ comTelefone: true, tipo: 'RECLAMACAO' });
+    for (let i = 0; i < n; i++) await registrarTentativa(manifestacao.id, {}).expect(201);
+    return manifestacao;
+  }
+
+  it('CT27 - encerra com desfecho: telefone e hash apagados, pediu_retorno mantido, log sem o número', async () => {
+    const manifestacao = await chamadoComTentativas(1);
+
+    const resposta = await finalizar(manifestacao.id, {
+      status: 'ENCERRADA',
+      desfecho: 'Paciente orientada; reclamação encaminhada à coordenação.',
+    }).expect(200);
+    expect(resposta.body).toMatchObject({
+      status: 'ENCERRADA',
+      desfecho: 'Paciente orientada; reclamação encaminhada à coordenação.',
+      telefone: null,
+      pediuRetorno: true,
+    });
+    expect(resposta.body.finalizadaEm).not.toBeNull();
+
+    const gravada = await prisma.manifestacao.findUnique({ where: { id: manifestacao.id } });
+    expect(gravada).toMatchObject({
+      telefoneCifrado: null,
+      telefoneHash: null,
+      pediuRetorno: true,
+    });
+
+    const log = await logDe(manifestacao.id);
+    expect(log.at(-1)).toMatchObject({
+      usuarioId: superAdmin.id,
+      acao: 'ANONIMIZACAO',
+      dadosAnteriores: { status: 'EM_CONTATO' },
+      dadosNovos: { status: 'ENCERRADA' },
+    });
+    // O id do log é BigInt, que o JSON não aceita: só os dados gravados importam aqui
+    const todoLog = JSON.stringify(
+      log.map(({ dadosAnteriores, dadosNovos }) => [dadosAnteriores, dadosNovos]),
+    );
+    for (const proibido of [TELEFONE, hmac(TELEFONE), 'telefone']) {
+      expect(todoLog).not.toContain(proibido);
+    }
+  });
+
+  it('CT26 - "Sem retorno" com 2 tentativas sem sucesso = 422; com 3, finaliza', async () => {
+    const manifestacao = await chamadoComTentativas(2);
+    const sem = { status: 'SEM_RETORNO', desfecho: 'Três ligações sem resposta.' };
+
+    const recusada = await finalizar(manifestacao.id, sem).expect(422);
+    expect(recusada.body.erro.codigo).toBe('CHAMADO_SEM_TENTATIVAS_SUFICIENTES');
+    expect(await prisma.manifestacao.findUnique({ where: { id: manifestacao.id } })).toMatchObject({
+      status: 'EM_CONTATO',
+      telefoneHash: hmac(TELEFONE),
+    });
+
+    // Contato realizado não conta como tentativa sem sucesso
+    await registrarTentativa(manifestacao.id, { resultado: 'CONTATO_REALIZADO' }).expect(201);
+    await finalizar(manifestacao.id, sem).expect(422);
+
+    await registrarTentativa(manifestacao.id, {}).expect(201);
+    const aceita = await finalizar(manifestacao.id, sem).expect(200);
+    expect(aceita.body).toMatchObject({
+      status: 'SEM_RETORNO',
+      telefone: null,
+      pediuRetorno: true,
+    });
+  });
+
+  it('CT28 - encerrar sem desfecho (ou só com espaços ou tags) = 400, nada alterado', async () => {
+    const manifestacao = await chamadoComTentativas(0);
+    for (const desfecho of [undefined, '', '   ', '<p></p>']) {
+      await finalizar(manifestacao.id, { status: 'ENCERRADA', desfecho }).expect(400);
+    }
+    await finalizar(manifestacao.id, { status: 'ENCERRADA', desfecho: 'x'.repeat(2001) }).expect(
+      400,
+    );
+    await finalizar(manifestacao.id, { status: 'NOVA', desfecho: 'Ok.' }).expect(400);
+
+    expect(await prisma.manifestacao.findUnique({ where: { id: manifestacao.id } })).toMatchObject({
+      status: 'NOVA',
+      desfecho: null,
+      finalizadaEm: null,
+      telefoneHash: hmac(TELEFONE),
+    });
+    expect(await logDe(manifestacao.id)).toEqual([]);
+  });
+
+  it('CT29 - finalizar um chamado já finalizado = 409', async () => {
+    const manifestacao = await chamadoComTentativas(0);
+    await finalizar(manifestacao.id, { status: 'ENCERRADA', desfecho: 'Resolvido.' }).expect(200);
+
+    const resposta = await finalizar(manifestacao.id, {
+      status: 'ENCERRADA',
+      desfecho: 'De novo.',
+    }).expect(409);
+    expect(resposta.body.erro.codigo).toBe('CHAMADO_JA_FINALIZADO');
+    const gravada = await prisma.manifestacao.findUnique({ where: { id: manifestacao.id } });
+    expect(gravada.desfecho).toBe('Resolvido.');
+  });
+
+  it('CT79 - encerrar com desfecho um chamado ainda a classificar = 422, nada alterado', async () => {
+    const manifestacao = await criarManifestacao({ comTelefone: true });
+
+    const resposta = await finalizar(manifestacao.id, {
+      status: 'ENCERRADA',
+      desfecho: 'Resolvido.',
+    }).expect(422);
+    expect(resposta.body.erro.codigo).toBe('TIPO_NAO_DEFINIDO');
+    expect(await prisma.manifestacao.findUnique({ where: { id: manifestacao.id } })).toMatchObject({
+      status: 'NOVA',
+      tipo: null,
+      desfecho: null,
+      telefoneHash: hmac(TELEFONE),
+    });
+  });
+
+  it('anônima vai de NOVA direto para ENCERRADA, e "Sem retorno" nela = 422', async () => {
+    const anonima = await criarManifestacao({ tipo: 'SUGESTAO' });
+    const recusada = await finalizar(anonima.id, {
+      status: 'SEM_RETORNO',
+      desfecho: 'Sem contato.',
+    }).expect(422);
+    expect(recusada.body.erro.codigo).toBe('CHAMADO_SEM_TELEFONE');
+
+    const resposta = await finalizar(anonima.id, {
+      status: 'ENCERRADA',
+      desfecho: 'Sugestão encaminhada ao setor.',
+    }).expect(200);
+    expect(resposta.body).toMatchObject({ status: 'ENCERRADA', pediuRetorno: false });
+  });
+
+  it('inexistente = 404', async () => {
+    const resposta = await finalizar(999999, { status: 'ENCERRADA', desfecho: 'Ok.' }).expect(404);
+    expect(resposta.body.erro.codigo).toBe('MANIFESTACAO_NAO_ENCONTRADA');
+  });
+});
+
 describe('controle de acesso', () => {
-  it('CT41 - Gestor recebe 403 na lista, no alerta e no detalhe, mesmo do seu setor', async () => {
+  it('CT41 - Gestor recebe 403 em todas as rotas da Ouvidoria, mesmo do seu setor', async () => {
     const manifestacao = await criarManifestacao({ comTelefone: true });
     for (const pedido of [
       listar('', tokenGestor),
       alertas(tokenGestor),
       detalhar(manifestacao.id, tokenGestor),
+      classificar(manifestacao.id, { tipo: 'ELOGIO' }, tokenGestor),
+      registrarTentativa(manifestacao.id, {}, tokenGestor),
+      finalizar(manifestacao.id, { status: 'ENCERRADA', desfecho: 'Ok.' }, tokenGestor),
     ]) {
       const resposta = await pedido.expect(403);
       expect(JSON.stringify(resposta.body)).not.toContain(TELEFONE);
     }
+    // Nada mudou
+    expect(await prisma.manifestacao.findUnique({ where: { id: manifestacao.id } })).toMatchObject({
+      tipo: null,
+      status: 'NOVA',
+    });
+    expect(await prisma.tentativaContato.count()).toBe(0);
   });
 
   it('sem token = 401', async () => {
     await request(app).get('/api/manifestacoes').expect(401);
     await request(app).get('/api/manifestacoes/alertas').expect(401);
     await request(app).get('/api/manifestacoes/1').expect(401);
+    await request(app).put('/api/manifestacoes/1/tipo').send({ tipo: 'ELOGIO' }).expect(401);
+    await request(app).post('/api/manifestacoes/1/tentativas').send({}).expect(401);
+    await request(app).post('/api/manifestacoes/1/finalizacao').send({}).expect(401);
   });
 });

@@ -135,6 +135,192 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Erro'
+  /api/manifestacoes/{id}/tipo:
+    put:
+      tags: [Ouvidoria]
+      summary: Classifica a manifestação ou corrige o tipo (só Super Admin)
+      description: >
+        Define o tipo de uma manifestação que chegou "a classificar" ou corrige o tipo de qualquer
+        manifestação, mesmo finalizada (RN12, D14). O tipo é obrigatório: uma manifestação
+        classificada nunca volta a ficar sem tipo. Cada mudança grava no log o tipo anterior e o
+        novo (RNF11); enviar o tipo que ela já tem não grava nada. Devolve o chamado atualizado,
+        como o GET /api/manifestacoes/{id}.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Número de protocolo
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo]
+              additionalProperties: false
+              properties:
+                tipo: { type: string, enum: [ELOGIO, RECLAMACAO, SUGESTAO] }
+      responses:
+        '200':
+          description: Chamado com o tipo novo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestacaoDetalhe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Manifestação não encontrada (MANIFESTACAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/manifestacoes/{id}/tentativas:
+    post:
+      tags: [Ouvidoria]
+      summary: Registra uma tentativa de contato com o paciente (só Super Admin)
+      description: >
+        Só em chamado aberto (NOVA ou EM_CONTATO) em que o paciente pediu retorno (RF15). Quem
+        registrou é o usuário logado. A primeira tentativa muda o status de NOVA para EM_CONTATO,
+        tira o chamado do alerta de 48 horas (RF16) e grava a mudança no log (RNF11). Devolve o
+        chamado atualizado, como o GET /api/manifestacoes/{id}.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Número de protocolo
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [realizadaEm, resultado]
+              additionalProperties: false
+              properties:
+                realizadaEm:
+                  type: string
+                  format: date-time
+                  description: Data e hora do contato, com fuso; não pode estar no futuro
+                  examples: ['2026-10-30T14:00:00-03:00']
+                resultado: { type: string, enum: [CONTATO_REALIZADO, SEM_SUCESSO] }
+                observacao:
+                  type: string
+                  maxLength: 2000
+                  description: Sem HTML; vazia é gravada como null
+                  examples: [Caixa postal.]
+      responses:
+        '201':
+          description: Tentativa registrada; chamado atualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestacaoDetalhe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Manifestação não encontrada (MANIFESTACAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: O chamado já foi finalizado (CHAMADO_JA_FINALIZADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            Chamado anônimo, sem telefone para contato (CHAMADO_SEM_TELEFONE), ou data e hora no
+            futuro (DATA_FUTURA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/manifestacoes/{id}/finalizacao:
+    post:
+      tags: [Ouvidoria]
+      summary: Finaliza o chamado como Encerrada ou Sem retorno (só Super Admin)
+      description: >
+        O desfecho é obrigatório (RN07) e o chamado precisa ter o tipo definido (RN12). Sem retorno
+        exige pelo menos 3 tentativas de contato sem sucesso e só vale para quem pediu retorno; a
+        manifestação anônima vai de NOVA direto para ENCERRADA. Numa só transação, o status muda, o
+        desfecho e a data são gravados, o telefone e o hash são apagados (RNF12) e o log recebe a
+        ação ANONIMIZACAO, sem o número. pediuRetorno continua true (D7). Devolve o chamado
+        atualizado, já com telefone null.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Número de protocolo
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, desfecho]
+              additionalProperties: false
+              properties:
+                status: { type: string, enum: [ENCERRADA, SEM_RETORNO] }
+                desfecho:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                  description: Sem HTML; só espaços conta como vazio (400)
+                  examples: [Paciente orientada; reclamação encaminhada à coordenação do setor.]
+      responses:
+        '200':
+          description: Chamado finalizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestacaoDetalhe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Manifestação não encontrada (MANIFESTACAO_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: O chamado já foi finalizado (CHAMADO_JA_FINALIZADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            Chamado ainda a classificar (TIPO_NAO_DEFINIDO), Sem retorno com menos de 3 tentativas
+            sem sucesso (CHAMADO_SEM_TENTATIVAS_SUFICIENTES) ou Sem retorno num chamado anônimo
+            (CHAMADO_SEM_TELEFONE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
 components:
   schemas:
     ManifestacaoReferencia:

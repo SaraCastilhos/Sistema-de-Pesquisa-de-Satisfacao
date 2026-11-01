@@ -1,5 +1,9 @@
 // Acesso às tabelas manifestacao, tentativa_contato e anexo_manifestacao. Só consultas: as
-// regras (filtro "a classificar", alerta de 48 horas, telefone decifrado) ficam no service.
+// regras (filtro "a classificar", alerta de 48 horas, telefone decifrado, ciclo do chamado)
+// ficam no service. As funções que gravam recebem o "cliente" opcional, para rodarem dentro da
+// transação do service.
+
+const STATUS_ABERTOS = ['NOVA', 'EM_CONTATO'];
 
 // Campos da lista e do alerta (consulta 4.8 do mapeamento). O select é explícito e NÃO inclui
 // texto, telefoneCifrado, telefoneHash nem profissionalCitado: eles só são lidos no detalhe de
@@ -90,7 +94,64 @@ function criarManifestacoesRepository(prisma) {
     });
   }
 
-  return { listar, buscarDetalhe, listarAlertas };
+  // O que o service precisa para decidir o próximo passo do chamado. Nunca lê o telefone.
+  function buscarSituacao(id, cliente = prisma) {
+    return cliente.manifestacao.findUnique({
+      where: { id },
+      select: { id: true, tipo: true, status: true, pediuRetorno: true },
+    });
+  }
+
+  function atualizarTipo(id, tipo, cliente = prisma) {
+    return cliente.manifestacao.update({ where: { id }, data: { tipo }, select: { id: true } });
+  }
+
+  function contarTentativasSemSucesso(manifestacaoId, cliente = prisma) {
+    return cliente.tentativaContato.count({ where: { manifestacaoId, resultado: 'SEM_SUCESSO' } });
+  }
+
+  // Põe o chamado em "Em contato" só se ele ainda estiver aberto, num comando só: se outra
+  // pessoa finalizou o chamado ao mesmo tempo, nada muda e o count é 0 (o service responde 409).
+  // Num chamado já EM_CONTATO, só o atualizado_em muda.
+  async function marcarEmContato(id, cliente = prisma) {
+    const { count } = await cliente.manifestacao.updateMany({
+      where: { id, status: { in: STATUS_ABERTOS } },
+      data: { status: 'EM_CONTATO' },
+    });
+    return count;
+  }
+
+  function criarTentativa(
+    { manifestacaoId, usuarioId, realizadaEm, resultado, observacao },
+    cliente = prisma,
+  ) {
+    return cliente.tentativaContato.create({
+      data: { manifestacaoId, usuarioId, realizadaEm, resultado, observacao },
+      select: { id: true },
+    });
+  }
+
+  // Finalização (consulta 4.11 do mapeamento): o status, o desfecho e o apagamento do telefone e
+  // do hash vão no mesmo comando, e só num chamado ainda aberto. count 0 = já finalizado.
+  async function finalizar(id, { status, desfecho, finalizadaEm }, cliente = prisma) {
+    const { count } = await cliente.manifestacao.updateMany({
+      where: { id, status: { in: STATUS_ABERTOS } },
+      data: { status, desfecho, finalizadaEm, telefoneCifrado: null, telefoneHash: null },
+    });
+    return count;
+  }
+
+  return {
+    listar,
+    buscarDetalhe,
+    listarAlertas,
+    buscarSituacao,
+    atualizarTipo,
+    contarTentativasSemSucesso,
+    marcarEmContato,
+    criarTentativa,
+    finalizar,
+  };
 }
 
 module.exports = { criarManifestacoesRepository };
