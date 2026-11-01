@@ -471,7 +471,7 @@ WHERE s.nota_geral IS NOT NULL
   AND s.data_atendimento <  date_trunc('month', $1::date) + INTERVAL '1 month';
 ```
 
-`$2` é `REGRAS.NOTA_POSITIVA_MINIMA` (7). A contagem de avaliações só serve para o service conferir o mínimo (`TV_WALL_MINIMO_RESPOSTAS`) e **não vai para a resposta da API**. A taxa de adesão do mês é calculada como na consulta 4.5, só com os setores que têm atendimentos informados.
+`$2` é `REGRAS.NOTA_POSITIVA_MINIMA` (7). A satisfação geral e a evolução **não têm mínimo de avaliações** (RF30, D17): só sem nenhuma avaliação o índice vem vazio e o painel sai do rodízio. A contagem de avaliações só serve para o service conferir o mínimo (`TV_WALL_MINIMO_RESPOSTAS`) dos setores e etapas marcados, mais abaixo, e **não vai para a resposta da API**. A taxa de adesão do mês é calculada como na consulta 4.5, só com os setores que têm atendimentos informados.
 
 Evolução do índice nos últimos 6 meses:
 
