@@ -39,6 +39,11 @@ const data = z
 
 const id = z.number().int().positive();
 
+// Rostinho de 1 a 5 (RF04) e nota de recomendação de 0 a 10 (RF03). Valem também para o
+// formulário de papel digitado (pesquisa.papel.schemas.js), para as duas entradas nunca discordarem.
+const rostinho = z.number().int().min(1).max(5);
+const nota = z.number().int().min(0).max(10);
+
 const carregar = { params: z.object({ slug }) };
 
 const abrir = {
@@ -73,7 +78,7 @@ const registrarResposta = {
     .object({
       perguntaId: id,
       pulada: z.boolean(),
-      valor: z.number().int().min(1).max(5).optional(),
+      valor: rostinho.optional(),
     })
     .refine((corpo) => (corpo.pulada ? corpo.valor === undefined : corpo.valor !== undefined), {
       message: 'Pergunta pulada vem sem valor; pergunta respondida precisa do rostinho de 1 a 5.',
@@ -84,7 +89,7 @@ const registrarResposta = {
 // Nota de recomendação de 0 a 10 (RF03)
 const registrarNota = {
   params,
-  body: z.object({ nota: z.number().int().min(0).max(10) }),
+  body: z.object({ nota }),
 };
 
 // Texto vigente dos termos de privacidade (RF24): sem parâmetros
@@ -120,4 +125,6 @@ module.exports = {
   registrarNota,
   termoVigente,
   registrarManifestacao,
+  // Campos reaproveitados pelo formulário de papel
+  campos: { data, id, rostinho, nota },
 };

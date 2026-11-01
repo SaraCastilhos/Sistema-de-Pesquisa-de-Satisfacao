@@ -45,8 +45,8 @@ O Prisma gera, a partir do `schema.prisma`, uma classe de acesso para cada model
 | `AtendimentoMensal` | `atendimento_mensal` | `prisma.atendimentoMensal` | `atendimentos.repository` |
 | `Etapa` | `etapa` | `prisma.etapa` | `etapas.repository` (cadastro); `perguntas.repository` e `pesquisa.repository` também leem |
 | `Pergunta` | `pergunta` | `prisma.pergunta` | `perguntas.repository` |
-| `Sessao` | `sessao` | `prisma.sessao` | `pesquisa.repository` |
-| `Resposta` | `resposta` | `prisma.resposta` | `pesquisa.repository` |
+| `Sessao` | `sessao` | `prisma.sessao` | `pesquisa.repository`; `pesquisa.papel.repository` (só canal `PAPEL`) |
+| `Resposta` | `resposta` | `prisma.resposta` | `pesquisa.repository`; `pesquisa.papel.repository` (só respostas de sessão `PAPEL`) |
 | `TermoPrivacidade` | `termo_privacidade` | `prisma.termoPrivacidade` | `termos.repository` |
 | `Manifestacao` | `manifestacao` | `prisma.manifestacao` | `manifestacoes.repository` |
 | `TentativaContato` | `tentativa_contato` | `prisma.tentativaContato` | `manifestacoes.repository` |
@@ -72,7 +72,7 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 | `escalas` | `listarDoMes`, `substituirMes` | `escala` | Importação em transação (consulta 4.9) |
 | `atendimentos` | `listarDoMes`, `salvar` | `atendimento_mensal` | `upsert` por setor e mês |
 | `perguntas` | `listarDoSetor`, `criar`, `atualizar`, `reordenar` | `pergunta`, `etapa` | Leitura e escrita, sem exclusão; o setor da pergunta é o da etapa |
-| `pesquisa` | `abrirSessao`, `buscarSessao`, `informarAtendimento`, `informarRespondente`, `gravarResposta`, `gravarNota`, mais as funções do formulário de papel (S5) | `sessao`, `resposta` | Na pesquisa, só inserção, mais a gravação única da data informada, de quem respondeu e da nota. No formulário de papel (canal `PAPEL`), digitação, correção e exclusão, cada uma numa transação com o log (consulta 4.13) |
+| `pesquisa` | `abrirSessao`, `buscarSessao`, `informarAtendimento`, `informarRespondente`, `gravarResposta`, `gravarNota`, e, em `pesquisa.papel.repository`, as do formulário de papel (`criarSessao`, `atualizarSessao`, `gravarRespostas`, `apagarRespostas`, `excluirSessao`, `listar`, `listarDigitacoes`) | `sessao`, `resposta` | Na pesquisa, só inserção, mais a gravação única da data informada, de quem respondeu e da nota. No formulário de papel (canal `PAPEL`), digitação, correção e exclusão, cada uma numa transação com o log (consulta 4.13) |
 | `termos` | `buscarVigente`, `listar`, `criarVersao` | `termo_privacidade` | Só inserção (cada versão é nova) |
 | `manifestacoes` | `criar`, `listar`, `buscarDetalhe`, `listarAlertas`, `existeDuplicata`, `classificar`, `registrarTentativa`, `finalizar`, `anexarFoto`, `buscarFoto` | `manifestacao`, `tentativa_contato`, `anexo_manifestacao` | Leitura e escrita, sem exclusão |
 | `indicadores` | `resumo`, `distribuicaoNotas`, `evolucao`, `porSetor`, `porEtapa`, `porEquipe`, `adesao`, `dadosExportacao` | Leitura de `sessao`, `resposta`, `pergunta`, `etapa`, `escala`, `equipe`, `atendimento_mensal`, `manifestacao` | Só leitura |
