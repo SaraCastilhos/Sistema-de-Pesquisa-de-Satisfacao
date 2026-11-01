@@ -10,9 +10,9 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
 
   collectCoverageFrom: ['src/modules/**/*.service.js', 'src/utils/**/*.js'],
-  // Ligado na etapa de fechamento (BF), quando todos os services já tiverem testes.
-  // Com o caminho em glob, o limite vale para CADA service (seção 5 do plano de testes).
-  // coverageThreshold: {
-  //   './src/modules/**/*.service.js': { statements: 60, branches: 60, functions: 60, lines: 60 },
-  // },
+  // Limite mínimo de cobertura (RNF13). Com o caminho em glob, o limite vale para CADA service
+  // (seção 5 do plano de testes); um service abaixo de 60% faz o npm run test:coverage falhar.
+  coverageThreshold: {
+    './src/modules/**/*.service.js': { statements: 60, branches: 60, functions: 60, lines: 60 },
+  },
 };

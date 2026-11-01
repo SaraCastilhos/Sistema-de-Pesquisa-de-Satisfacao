@@ -39,7 +39,11 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
           content:
@@ -74,7 +78,11 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Etapa não encontrada (ETAPA_NAO_ENCONTRADA)
           content:
@@ -118,7 +126,11 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Etapa não encontrada (ETAPA_NAO_ENCONTRADA)
           content:
@@ -172,7 +184,11 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
         '403':
-          $ref: '#/components/responses/SemPermissao'
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
         '404':
           description: Pergunta não encontrada (PERGUNTA_NAO_ENCONTRADA)
           content:

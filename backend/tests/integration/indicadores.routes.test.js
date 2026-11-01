@@ -382,6 +382,18 @@ describe('GET /api/indicadores', () => {
     await indicadores(token, `${OUTUBRO}&setorId=${pa.id}`).expect(403);
   });
 
+  it('CT62 - SQL injection nos filtros = 400, sem afetar nenhuma tabela', async () => {
+    const ataque = encodeURIComponent("'; DROP TABLE sessao; --");
+    const sessoesAntes = await prisma.sessao.count();
+
+    await indicadores(tokenSuperAdmin, `${OUTUBRO}&setorId=${ataque}`).expect(400);
+    await indicadores(tokenSuperAdmin, `${OUTUBRO}&canal=${ataque}`).expect(400);
+    await indicadores(tokenSuperAdmin, `?inicio=${ataque}&fim=2026-10-31`).expect(400);
+
+    await indicadores(tokenSuperAdmin).expect(200);
+    expect(await prisma.sessao.count()).toBe(sessoesAntes);
+  });
+
   it('CT59 - segunda leitura sem gravação vem do cache; depois de uma gravação, recalcula', async () => {
     const espiao = jest.spyOn(prisma, '$queryRaw');
     try {

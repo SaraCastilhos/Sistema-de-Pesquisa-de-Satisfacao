@@ -235,25 +235,43 @@ Cada defeito encontrado vira uma issue no GitHub com o rótulo `bug`, contendo o
 
 | Data | Versão (tag) | Commit | Executado por | Resultado geral |
 | --- | --- | --- | --- | --- |
-| | | | | |
+| 31/10/2026 | — (fechamento do backend, antes da `v0.1.0`) | `5cf9f7c` (`develop`) com as mudanças da branch `test/fechamento-backend` | Sara | Testes automáticos: 808 de 808 passaram; cobertura acima de 60% em todos os services; ESLint e Prettier sem erros. Testes manuais ainda não executados (dependem do frontend) |
 
 ## 10. Resultados por nível
 
 | Nível | Casos planejados | Executados | Passaram | Falharam | Observações |
 | --- | --- | --- | --- | --- | --- |
-| Unitário | | | | | |
-| Banco de dados | | | | | |
-| Integração | | | | | |
-| Manual (interface, acessibilidade, desempenho) | | | | | |
-| Aceitação (RNF05) | | | | | |
+| Unitário | 8 | 8 | 8 | 0 | 367 testes em 31 arquivos de `tests/unit/`, todos aprovados. Os casos CT ficam nos services e nas funções puras (turnos, horas úteis, criptografia) |
+| Banco de dados | 5 | 5 | 5 | 0 | CT61 e a parte de banco do CT46, CT86, CT87 e CT92, em `tests/integration/banco.restricoes.test.js` e `perguntas.routes.test.js` |
+| Integração | 66 | 66 | 66 | 0 | 441 testes em 21 arquivos de `tests/integration/` (os de banco incluídos), todos aprovados |
+| Manual (interface, acessibilidade, desempenho) | 14 | 0 | — | — | Dependem das telas; executados na entrega da `v0.1.0` |
+| Aceitação (RNF05) | 1 | 0 | — | — | CT22, antes da entrega final |
+
+Um caso de dois níveis (ex.: CT92, B/I) conta nas duas linhas. Os 5 casos removidos (CT10, CT34, CT45, CT47 e CT80) ficam fora da contagem. Além dos 75 casos do plano, a suíte tem testes sem identificador CT, que cobrem validações, erros e casos de borda de cada rota. A ligação de cada requisito do backend com o código e os testes está em [`rastreabilidade-backend.md`](rastreabilidade-backend.md).
 
 ## 11. Cobertura
 
+Medida em 31/10/2026 (`npm run test:coverage`), com o limite de 60% por service ligado no `jest.config.js`:
+
 | Service | Linhas | Ramificações | Funções |
 | --- | --- | --- | --- |
-| | | | |
+| `atendimentos.service.js` | 100% | 100% | 100% |
+| `auth.service.js` | 100% | 100% | 100% |
+| `equipes.service.js` | 100% | 100% | 100% |
+| `escalas.service.js` | 100% | 92,04% | 100% |
+| `etapas.service.js` | 100% | 100% | 100% |
+| `indicadores.service.js` | 100% | 94,25% | 100% |
+| `manifestacoes.service.js` | 100% | 100% | 100% |
+| `perguntas.service.js` | 100% | 100% | 100% |
+| `pesquisa.papel.service.js` | 100% | 96,07% | 100% |
+| `pesquisa.service.js` | 98,05% | 86,56% | 100% |
+| `setores.service.js` | 100% | 100% | 100% |
+| `termos.service.js` | 100% | 100% | 100% |
+| `turnos.service.js` | 100% | 100% | 100% |
+| `tvwall.service.js` | 94,28% | 73,68% | 88,23% |
+| `usuarios.service.js` | 100% | 100% | 100% |
 
-Média da camada de serviços: — (mínimo exigido: 60%)
+Média da camada de serviços: 99,55% das linhas (883 de 887), 95,04% das ramificações e 99,25% das funções (mínimo exigido: 60% em cada service). Pesquisa, manifestações e indicadores, as regras críticas, passam da meta de 80% da seção 5.
 
 ## 12. Defeitos encontrados
 

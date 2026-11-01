@@ -260,6 +260,7 @@ paths:
               additionalProperties: false
               properties:
                 tipo: { type: string, enum: [ELOGIO, RECLAMACAO, SUGESTAO] }
+            example: { tipo: RECLAMACAO }
       responses:
         '200':
           description: Chamado com o tipo novo
