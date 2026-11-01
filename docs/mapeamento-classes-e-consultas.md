@@ -412,13 +412,29 @@ Atendida pelo índice `manifestacao (telefone_hash, setor_id)`. O resultado só 
 
 ```js
 await prisma.$transaction(async (tx) => {
+  const antes = await tx.manifestacao.findUnique({
+    where: { id },
+    select: { tipo: true, status: true, pediuRetorno: true },
+  });
+  if (!antes) throw new AppError(404, 'MANIFESTACAO_NAO_ENCONTRADA', '...');
+  if (!['NOVA', 'EM_CONTATO'].includes(antes.status)) {
+    throw new AppError(409, 'CHAMADO_JA_FINALIZADO', '...');
+  }
+  // RN12: só se finaliza chamado classificado (ck_manifestacao_tipo_finalizacao)
+  if (antes.tipo === null) throw new AppError(422, 'TIPO_NAO_DEFINIDO', '...');
+
   if (status === 'SEM_RETORNO') {
+    // A anônima nunca fica "Sem retorno": vai de NOVA direto para ENCERRADA
+    if (!antes.pediuRetorno) throw new AppError(422, 'CHAMADO_SEM_TELEFONE', '...');
     const falhas = await tx.tentativaContato.count({
       where: { manifestacaoId: id, resultado: 'SEM_SUCESSO' },
     });
-    if (falhas < 3) throw new AppError(422, 'CHAMADO_SEM_TENTATIVAS_SUFICIENTES', '...');
+    if (falhas < REGRAS.TENTATIVAS_MINIMAS_SEM_RETORNO) {
+      throw new AppError(422, 'CHAMADO_SEM_TENTATIVAS_SUFICIENTES', '...');
+    }
   }
 
+  // O status entra no WHERE: se outra pessoa finalizou entre a leitura e aqui, count = 0
   const { count } = await tx.manifestacao.updateMany({
     where: { id, status: { in: ['NOVA', 'EM_CONTATO'] } },
     data: {
@@ -431,13 +447,15 @@ await prisma.$transaction(async (tx) => {
   await tx.logAuditoria.create({
     data: {
       usuarioId, acao: 'ANONIMIZACAO', entidade: 'manifestacao', entidadeId: String(id),
-      dadosNovos: { status, desfecho },
+      dadosAnteriores: { status: antes.status }, dadosNovos: { status, desfecho },
     },
   });
 });
 ```
 
-O telefone é apagado no mesmo comando que finaliza o chamado, e o banco recusaria a finalização sem isso (restrição `ck_manifestacao_finalizacao`). O log não recebe o telefone (seção 5.2 do modelo).
+O telefone é apagado no mesmo comando que finaliza o chamado, e o banco recusaria a finalização sem isso (restrição `ck_manifestacao_finalizacao`). O log não recebe o telefone (seção 5.2 do modelo). A ação é sempre `ANONIMIZACAO`, mesmo na manifestação anônima, para toda finalização ser encontrada no log da mesma forma.
+
+A tentativa de contato segue o mesmo cuidado: numa transação, um `updateMany` com `status IN ('NOVA', 'EM_CONTATO')` põe o chamado em `EM_CONTATO` (se outra pessoa o finalizou ao mesmo tempo, `count = 0` e a resposta é `409`) e só então a tentativa é gravada. Só a primeira tentativa, que muda `NOVA` para `EM_CONTATO`, grava log; as seguintes já ficam registradas na própria `tentativa_contato`, com o usuário e a data.
 
 ### 4.12 Painéis do TV Wall (RF30, RN08)
 
