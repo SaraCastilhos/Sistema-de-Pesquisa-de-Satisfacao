@@ -1,0 +1,38 @@
+.rolagem {
+  overflow-x: auto;
+}
+
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--tamanho-pequeno);
+  text-align: left;
+}
+
+.tabela th {
+  padding: 14px 18px;
+  background: var(--cor-superficie);
+  font-size: var(--tamanho-legenda);
+  font-weight: 500;
+  color: var(--cor-texto-secundario);
+  white-space: nowrap;
+}
+
+.tabela td {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.clicavel {
+  cursor: pointer;
+}
+
+.clicavel:hover,
+.clicavel:focus-visible {
+  background: var(--cor-superficie);
+}
+
+.vazio {
+  text-align: center;
+  color: var(--cor-texto-secundario);
+}
