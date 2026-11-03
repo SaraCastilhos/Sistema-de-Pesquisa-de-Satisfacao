@@ -1,0 +1,28 @@
+.pagina {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--espaco-8) var(--espaco-4);
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--espaco-4);
+}
+
+.linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+  margin-bottom: var(--espaco-3);
+}
+
+.coluna {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.tabela {
+  margin-top: var(--espaco-4);
+}
