@@ -1,0 +1,80 @@
+/*
+ * Tokens visuais do sistema. Valores do Figma conferidos no código do Lovable
+ * (referencia-lovable/.../src/styles.css, cores em oklch convertidas para hexadecimal).
+ * Nenhuma cor fica solta fora deste arquivo.
+ */
+:root {
+  /* Cores da marca */
+  --cor-marca: #d11728;
+  --cor-marca-suave: #fff0ee;
+  --cor-sobre-marca: #ffffff;
+
+  /* Texto */
+  --cor-texto: #22272e;
+  --cor-texto-secundario: #696f78;
+
+  /* Superfícies */
+  --cor-fundo: #f6f8f9;
+  --cor-cartao: #ffffff;
+  --cor-superficie: #f2f4f5;
+  --cor-superficie-forte: #eef0f3;
+  --cor-borda: #e2e4e7;
+  --cor-sobreposicao: rgba(25, 32, 40, 0.4);
+
+  /* Estados */
+  --cor-sucesso: #007450;
+  --cor-sucesso-suave: #e3f5ec;
+  --cor-atencao: #8a5a00; /* Lovable: #a26a00; escurecido para 4,5:1 sobre o fundo suave */
+  --cor-atencao-suave: #fff5e0;
+  --cor-perigo: #c7342c;
+  --cor-perigo-suave: #ffedea;
+  --cor-info: #2d6ca8;
+  --cor-info-suave: #e5f0fc;
+  --cor-neutra: #5f656e; /* Lovable: #696f78; escurecido para 4,5:1 sobre o fundo suave */
+  --cor-neutra-suave: #eef0f3;
+
+  /* Gráficos */
+  --cor-grafico-linha: #d73f39;
+  --cor-grafico-preenchimento: #fff0ee;
+  --cor-grafico-grade: #e9ebee;
+
+  /* Pesquisa do paciente (tons do Lovable em .patient-page) */
+  --cor-pesquisa-fundo: #f9f7f7;
+  --cor-pesquisa-borda: #d8e0dd;
+  --cor-pesquisa-texto-secundario: #53655e;
+  --cor-pesquisa-rosto: #eef6f3;
+  --cor-pesquisa-rosto-traco: #637e74;
+
+  /* Fontes */
+  --fonte-texto: 'DM Sans Variable', 'DM Sans', system-ui, sans-serif;
+  --fonte-titulo: 'Manrope Variable', 'Manrope', system-ui, sans-serif;
+
+  --tamanho-legenda: 11px;
+  --tamanho-pequeno: 12px;
+  --tamanho-texto: 14px;
+  --tamanho-medio: 16px;
+  --tamanho-pesquisa: 18px; /* mínimo da pesquisa (RNF04) */
+  --tamanho-titulo-secao: 20px;
+  --tamanho-titulo: 28px;
+
+  /* Espaçamentos */
+  --espaco-1: 4px;
+  --espaco-2: 8px;
+  --espaco-3: 12px;
+  --espaco-4: 16px;
+  --espaco-5: 20px;
+  --espaco-6: 24px;
+  --espaco-8: 32px;
+
+  /* Raios e sombras */
+  --raio-selo: 4px;
+  --raio-controle: 6px;
+  --raio-cartao: 8px;
+  --raio-pesquisa: 16px;
+  --sombra-cartao: 0 2px 3px rgba(26, 34, 43, 0.03);
+  --sombra-flutuante: 0 10px 40px rgba(26, 34, 43, 0.12);
+
+  /* Tamanhos de toque */
+  --altura-controle: 36px;
+  --toque-minimo: 48px; /* pesquisa (RNF04) */
+}
