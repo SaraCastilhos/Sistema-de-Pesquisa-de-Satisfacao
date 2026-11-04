@@ -1,0 +1,401 @@
+/* Menu lateral de 232 px (Figma, captura de 1920 px); recolhido, só os ícones.
+   Abaixo de 1024 px o menu vira gaveta (RNF03). */
+.painel {
+  --largura-menu: 232px;
+  display: flex;
+  min-height: 100vh;
+}
+
+.menu {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex: 0 0 var(--largura-menu);
+  flex-direction: column;
+  width: var(--largura-menu);
+  height: 100vh;
+  padding: var(--espaco-4);
+  overflow-y: auto;
+  border-right: 1px solid var(--cor-borda);
+  background: var(--cor-cartao);
+}
+
+.recolhido .menu {
+  flex-basis: 72px;
+  width: 72px;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--espaco-2) var(--espaco-2) var(--espaco-4);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.marca img {
+  width: 150px;
+  height: auto;
+}
+
+.recolhido .marca img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  object-position: left center;
+}
+
+.legenda {
+  margin: var(--espaco-4) var(--espaco-3) var(--espaco-2);
+  color: var(--cor-texto-secundario);
+  font-size: var(--tamanho-legenda);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.navegacao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.base {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  margin-top: auto;
+  padding-top: var(--espaco-6);
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--espaco-3);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: transparent;
+  color: var(--cor-texto-secundario);
+  font-size: var(--tamanho-texto);
+  text-align: left;
+  text-decoration: none;
+}
+
+.item:hover {
+  background: var(--cor-superficie);
+  color: var(--cor-texto);
+}
+
+.item svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+
+.ativo,
+.ativo:hover {
+  background: var(--cor-marca-suave);
+  color: var(--cor-marca);
+  font-weight: 700;
+}
+
+.rotuloItem {
+  flex: 1;
+  min-width: 0;
+}
+
+.seta {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+.numero {
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: var(--raio-selo);
+  background: var(--cor-marca);
+  color: var(--cor-sobre-marca);
+  font-size: var(--tamanho-pequeno);
+  font-weight: 700;
+  text-align: center;
+}
+
+.hospital {
+  margin-top: var(--espaco-4);
+  padding: var(--espaco-4) var(--espaco-3) var(--espaco-2);
+  border-top: 1px solid var(--cor-borda);
+  font-size: var(--tamanho-pequeno);
+}
+
+.hospital p {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.hospital small {
+  display: block;
+  margin-top: 2px;
+  color: var(--cor-texto-secundario);
+  font-size: var(--tamanho-legenda);
+}
+
+.ponto {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cor-sucesso);
+}
+
+.recolher {
+  font-size: var(--tamanho-pequeno);
+}
+
+/* Menu recolhido: some o texto, ficam os ícones */
+.recolhido .legenda,
+.recolhido .hospital,
+.recolhido .rotuloItem,
+.recolhido .seta {
+  display: none;
+}
+
+.recolhido .item {
+  justify-content: center;
+  padding: 0;
+}
+
+.recolhido .numero {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  min-width: 18px;
+  padding: 0 4px;
+  font-size: var(--tamanho-legenda);
+}
+
+.principal {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.topo {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espaco-4);
+  height: 73px;
+  padding: 0 var(--espaco-8);
+  border-bottom: 1px solid var(--cor-borda);
+  background: var(--cor-cartao);
+}
+
+.caminho {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-width: 0;
+  color: var(--cor-texto-secundario);
+}
+
+.caminho strong {
+  color: var(--cor-texto);
+  font-weight: 500;
+}
+
+.conteudo {
+  flex: 1;
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: var(--espaco-8);
+}
+
+.rodape {
+  padding: var(--espaco-4) var(--espaco-8);
+  color: var(--cor-texto-secundario);
+  font-size: var(--tamanho-pequeno);
+}
+
+.usuario {
+  position: relative;
+}
+
+.usuarioBotao {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  min-height: 40px;
+  padding: 0 var(--espaco-2);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: transparent;
+}
+
+.usuarioBotao:hover {
+  background: var(--cor-superficie);
+}
+
+.usuarioBotao svg {
+  width: 16px;
+  height: 16px;
+  color: var(--cor-texto-secundario);
+}
+
+.avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cor-marca-suave);
+  color: var(--cor-marca);
+  font-size: var(--tamanho-pequeno);
+  font-weight: 700;
+}
+
+.usuarioMenu {
+  position: absolute;
+  top: calc(100% + var(--espaco-2));
+  right: 0;
+  z-index: 10;
+  min-width: 220px;
+  padding: var(--espaco-2);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-cartao);
+  background: var(--cor-cartao);
+  box-shadow: var(--sombra-flutuante);
+}
+
+.usuarioDados {
+  display: flex;
+  flex-direction: column;
+  padding: var(--espaco-2) var(--espaco-3) var(--espaco-3);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.usuarioDados span {
+  color: var(--cor-texto-secundario);
+  font-size: var(--tamanho-pequeno);
+}
+
+.sair {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  width: 100%;
+  min-height: 40px;
+  margin-top: var(--espaco-2);
+  padding: 0 var(--espaco-3);
+  border: 0;
+  border-radius: var(--raio-controle);
+  background: transparent;
+  text-align: left;
+}
+
+.sair:hover {
+  background: var(--cor-superficie);
+}
+
+.sair svg {
+  width: 16px;
+  height: 16px;
+}
+
+.abrirGaveta,
+.fecharGaveta,
+.cortina {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .menu,
+  .recolhido .menu {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    flex-basis: auto;
+    width: min(var(--largura-menu), 85vw);
+    transform: translateX(-100%);
+    transition: transform 0.2s;
+  }
+
+  .gaveta .menu {
+    transform: none;
+    box-shadow: var(--sombra-flutuante);
+  }
+
+  /* Na gaveta o menu é sempre o completo, mesmo lembrado como recolhido */
+  .recolhido .legenda,
+  .recolhido .hospital {
+    display: block;
+  }
+
+  .recolhido .rotuloItem {
+    display: block;
+  }
+
+  .recolhido .item {
+    justify-content: flex-start;
+    padding: 0 var(--espaco-3);
+  }
+
+  .recolhido .marca img {
+    width: 150px;
+    height: auto;
+  }
+
+  .recolher {
+    display: none;
+  }
+
+  .abrirGaveta,
+  .fecharGaveta {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--raio-controle);
+    background: transparent;
+  }
+
+  .abrirGaveta:hover,
+  .fecharGaveta:hover {
+    background: var(--cor-superficie);
+  }
+
+  .cortina {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: block;
+    background: var(--cor-sobreposicao);
+  }
+
+  .topo {
+    padding: 0 var(--espaco-4);
+  }
+
+  .conteudo {
+    padding: var(--espaco-4);
+  }
+
+  .rodape {
+    padding: var(--espaco-4);
+  }
+}
+
+@media (max-width: 640px) {
+  .usuarioNome {
+    display: none;
+  }
+}
