@@ -57,3 +57,8 @@ export function formatarHora(valor) {
     timeZone: FUSO,
   }).format(paraData(valor));
 }
+
+/** Data "AAAA-MM-DD" no fuso do hospital (ex.: hoje, para a tela de data da pesquisa). */
+export function dataIsoEmSaoPaulo(valor = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: FUSO }).format(paraData(valor));
+}
