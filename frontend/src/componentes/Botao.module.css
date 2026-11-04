@@ -1,0 +1,86 @@
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espaco-2);
+  min-height: var(--altura-controle);
+  padding: 0 var(--espaco-4);
+  border: 1px solid transparent;
+  border-radius: var(--raio-controle);
+  font-size: var(--tamanho-texto);
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.botao svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.botao:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.principal {
+  background: var(--cor-marca);
+  color: var(--cor-sobre-marca);
+  box-shadow: var(--sombra-cartao);
+}
+
+.principal:hover:not(:disabled) {
+  filter: brightness(0.93);
+}
+
+.secundario {
+  background: var(--cor-cartao);
+  border-color: var(--cor-borda);
+  color: var(--cor-texto);
+  box-shadow: var(--sombra-cartao);
+}
+
+.secundario:hover:not(:disabled),
+.discreto:hover:not(:disabled) {
+  background: var(--cor-marca-suave);
+}
+
+.discreto {
+  background: transparent;
+  color: var(--cor-texto-secundario);
+}
+
+.perigo {
+  background: var(--cor-cartao);
+  border-color: var(--cor-perigo);
+  color: var(--cor-perigo);
+}
+
+.perigo:hover:not(:disabled) {
+  background: var(--cor-perigo-suave);
+}
+
+.grande {
+  min-height: var(--toque-minimo);
+  min-width: var(--toque-minimo);
+  padding: 0 var(--espaco-6);
+  border-radius: 10px;
+  font-size: var(--tamanho-pesquisa);
+}
+
+.larguraTotal {
+  width: 100%;
+}
+
+.girando {
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}

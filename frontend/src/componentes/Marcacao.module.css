@@ -1,0 +1,80 @@
+/* Estilo comum de CaixaMarcacao e Interruptor */
+.linha {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+}
+
+.rotulo {
+  font-size: var(--tamanho-texto);
+  cursor: pointer;
+}
+
+.ajuda {
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.caixa {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--cor-marca);
+  cursor: pointer;
+}
+
+.grande {
+  align-items: center;
+  min-height: var(--toque-minimo);
+}
+
+.grande .rotulo {
+  font-size: var(--tamanho-pesquisa);
+}
+
+.grande .ajuda {
+  font-size: var(--tamanho-medio);
+}
+
+.grande .caixa {
+  width: 28px;
+  height: 28px;
+  margin: 0;
+}
+
+.interruptor {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--cor-borda);
+  transition: background-color 0.15s;
+}
+
+.interruptor[aria-checked='true'] {
+  background: var(--cor-marca);
+}
+
+.interruptor:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bolinha {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--cor-cartao);
+  box-shadow: var(--sombra-cartao);
+  transition: transform 0.15s;
+}
+
+.interruptor[aria-checked='true'] .bolinha {
+  transform: translateX(16px);
+}

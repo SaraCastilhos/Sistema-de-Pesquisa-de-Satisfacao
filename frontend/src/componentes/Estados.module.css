@@ -1,0 +1,50 @@
+/* Estilo comum de Carregando e EstadoVazio */
+.carregando {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espaco-2);
+  padding: var(--espaco-8);
+  color: var(--cor-texto-secundario);
+}
+
+.girando {
+  width: 20px;
+  height: 20px;
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espaco-2);
+  padding: 60px var(--espaco-6);
+  text-align: center;
+  color: var(--cor-texto-secundario);
+}
+
+.vazio h2 {
+  color: var(--cor-texto);
+}
+
+.iconeVazio {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: var(--espaco-2);
+  border-radius: var(--raio-cartao);
+  background: var(--cor-superficie);
+}
+
+.iconeVazio svg {
+  width: 22px;
+  height: 22px;
+}

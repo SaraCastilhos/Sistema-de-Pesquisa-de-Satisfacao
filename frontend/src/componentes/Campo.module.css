@@ -1,0 +1,71 @@
+/* Estilo comum de CampoTexto, AreaTexto e Selecao */
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rotulo {
+  font-size: var(--tamanho-pequeno);
+  font-weight: 500;
+}
+
+.obrigatorio {
+  color: var(--cor-marca);
+}
+
+.controle {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-controle);
+  background: var(--cor-cartao);
+  font-size: var(--tamanho-texto);
+}
+
+.controle:focus {
+  outline: none;
+  border-color: var(--cor-marca);
+  box-shadow: 0 0 0 2px var(--cor-marca-suave);
+}
+
+.controle:disabled {
+  background: var(--cor-superficie);
+  cursor: not-allowed;
+}
+
+.controle[aria-invalid='true'] {
+  border-color: var(--cor-perigo);
+}
+
+textarea.controle {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.grande .rotulo,
+.grande .controle {
+  font-size: var(--tamanho-pesquisa);
+}
+
+.grande .controle {
+  min-height: var(--toque-minimo);
+  border-radius: 12px;
+}
+
+.ajuda {
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.erro {
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-perigo);
+}
+
+.grande .ajuda,
+.grande .erro {
+  font-size: var(--tamanho-medio);
+}
