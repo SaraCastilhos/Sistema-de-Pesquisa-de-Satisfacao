@@ -41,3 +41,24 @@ export const ETAPAS_SIMULADAS = [
   { id: 5, setorId: 1, nome: 'Recepção', ordem: 1, ativo: true, exibirTvWall: false },
   { id: 6, setorId: 1, nome: 'Exame', ordem: 2, ativo: false, exibirTvWall: false },
 ];
+
+export const PERGUNTAS_SIMULADAS = [
+  {
+    id: 1,
+    etapaId: 1,
+    texto: 'Como você avalia o acolhimento na recepção?',
+    ordem: 1,
+    ativa: true,
+  },
+  { id: 2, etapaId: 2, texto: 'Como foi sua experiência na triagem?', ordem: 1, ativa: true },
+  { id: 3, etapaId: 3, texto: 'Como você avalia o cuidado da enfermagem?', ordem: 1, ativa: true },
+  { id: 4, etapaId: 3, texto: 'Os profissionais explicaram os cuidados?', ordem: 2, ativa: false },
+  { id: 5, etapaId: 4, texto: 'Como foi o atendimento da equipe médica?', ordem: 1, ativa: true },
+  {
+    id: 6,
+    etapaId: 5,
+    texto: 'Como você avalia o acolhimento na recepção?',
+    ordem: 1,
+    ativa: true,
+  },
+].map((pergunta) => ({ ...pergunta, criadoEm: AGORA, atualizadoEm: AGORA }));
