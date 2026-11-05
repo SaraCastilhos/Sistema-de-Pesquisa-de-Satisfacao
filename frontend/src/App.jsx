@@ -4,7 +4,6 @@ import SessaoProvider from './sessao/SessaoProvider';
 import RotaPainel from './sessao/RotaPainel';
 import LayoutPainel from './layouts/LayoutPainel';
 import LayoutPesquisa from './layouts/LayoutPesquisa';
-import LayoutTv from './layouts/LayoutTv';
 import PaginaNaoEncontrada from './paginas/PaginaNaoEncontrada';
 import PaginaPesquisa from './paginas/pesquisa/PaginaPesquisa';
 import PaginaTermos from './paginas/pesquisa/PaginaTermos';
@@ -40,10 +39,8 @@ export default function App() {
           <Route path="/termos" element={<PaginaTermos />} />
         </Route>
 
-        <Route element={<LayoutTv />}>
-          <Route path="/tv-wall" element={<PaginaTvWall />} />
-          <Route path="/tv-wall/:slug" element={<PaginaTvWall />} />
-        </Route>
+        <Route path="/tv-wall" element={<PaginaTvWall />} />
+        <Route path="/tv-wall/:slug" element={<PaginaTvWall />} />
 
         <Route path="/login" element={<PaginaLogin />} />
 
