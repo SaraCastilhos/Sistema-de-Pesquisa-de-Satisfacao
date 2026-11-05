@@ -5,7 +5,7 @@
   padding: var(--espaco-3) var(--espaco-4);
   border: 1px solid;
   border-radius: var(--raio-cartao);
-  font-size: var(--tamanho-texto);
+  font-size: inherit;
 }
 
 .icone {

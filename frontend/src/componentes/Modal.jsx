@@ -8,9 +8,19 @@ const FOCAVEIS =
 
 /**
  * Janela modal. Prende o foco dentro dela, fecha com Esc e devolve o foco a quem a abriu.
- * `rodape` recebe os botões de ação.
+ * `rodape` recebe os botões de ação. `ocultarFechar` tira o X (na pesquisa, o toque mínimo é 48 px
+ * e os botões do rodapé já fecham); o Esc continua fechando.
  */
-export default function Modal({ aberto, aoFechar, titulo, descricao, rodape, children, largura }) {
+export default function Modal({
+  aberto,
+  aoFechar,
+  titulo,
+  descricao,
+  rodape,
+  children,
+  largura,
+  ocultarFechar,
+}) {
   const janela = useRef(null);
   const idTitulo = useId();
 
@@ -69,9 +79,11 @@ export default function Modal({ aberto, aoFechar, titulo, descricao, rodape, chi
             <h2 id={idTitulo}>{titulo}</h2>
             {descricao && <p className={estilos.descricao}>{descricao}</p>}
           </div>
-          <button type="button" className={estilos.fechar} onClick={aoFechar} aria-label="Fechar">
-            <X aria-hidden="true" />
-          </button>
+          {!ocultarFechar && (
+            <button type="button" className={estilos.fechar} onClick={aoFechar} aria-label="Fechar">
+              <X aria-hidden="true" />
+            </button>
+          )}
         </header>
         <div className={estilos.corpo}>{children}</div>
         {rodape && <footer className={estilos.rodape}>{rodape}</footer>}
