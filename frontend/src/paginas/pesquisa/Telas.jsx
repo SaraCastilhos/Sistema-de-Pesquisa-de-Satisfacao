@@ -1,8 +1,10 @@
 /** Telas da pesquisa. Cada uma só mostra o passo e avisa a página pelo callback. */
 import { useState } from 'react';
-import { Angry, ArrowRight, Frown, Laugh, Meh, Smile } from 'lucide-react';
+import { Angry, ArrowRight, Frown, Heart, Laugh, Meh, Smile } from 'lucide-react';
 import { Botao } from '../../componentes';
 import { dataIsoEmSaoPaulo } from '../../utils/formatos';
+import { TABLET_VOLTA_AO_INICIO_SEGUNDOS } from '../../utils/regras';
+import { useContagem } from './temporizadores';
 import { avaliarTelaFixa } from './fluxo';
 import estilos from './Pesquisa.module.css';
 
@@ -291,13 +293,17 @@ export function TelaNota({ aoContinuar, enviando }) {
   );
 }
 
-/** Provisória: a mensagem e o agradecimento de verdade chegam na FM3. */
-export function TelaObrigado() {
+/** Agradecimento (RF11). No tablet, volta sozinho ao início; no celular, fica parado. */
+export function TelaAgradecimento({ noTablet, aoVoltar }) {
+  const restante = useContagem(TABLET_VOLTA_AO_INICIO_SEGUNDOS, noTablet, aoVoltar);
   return (
-    <>
-      <h1 className={estilos.titulo}>Obrigado!</h1>
-      <p className={estilos.texto}>Sua avaliação foi registrada.</p>
-    </>
+    <div className={estilos.agradecimento}>
+      <h1 className={estilos.titulo}>
+        Obrigado por nos ajudar a cuidar <Heart className={estilos.coracao} aria-hidden="true" />
+      </h1>
+      <p className={estilos.texto}>Sua opinião faz a diferença para o hospital.</p>
+      {noTablet && <p className={estilos.texto}>Voltando ao início em {restante} s</p>}
+    </div>
   );
 }
 

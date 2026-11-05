@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useParams } from 'react-router';
-import { Aviso, Botao, Carregando } from '../../componentes';
+import { Aviso, Botao, Carregando, Modal } from '../../componentes';
+import { TABLET_INATIVIDADE_SEGUNDOS } from '../../utils/regras';
 import * as api from '../../api/pesquisa';
+import { termosVigentes } from '../../api/termosPublicos';
+import { finalPelaNota } from './mensagem';
+import { useInatividade } from './temporizadores';
+import TelaMensagem from './TelaMensagem';
+import estilos from './Pesquisa.module.css';
 import {
   juntarProgresso,
   montarRespondente,
@@ -19,11 +25,11 @@ import {
 } from './armazenamento';
 import {
   TelaAbertura,
+  TelaAgradecimento,
   TelaFixa,
   TelaIndisponivel,
   TelaJaRespondeu,
   TelaNota,
-  TelaObrigado,
   TelaRostinho,
 } from './Telas';
 
@@ -40,11 +46,12 @@ export default function PaginaPesquisa({ canal }) {
   // Em ref: não muda a tela, e as gravações sempre leem o valor atual
   const sessaoId = useRef(null);
   const [progresso, setProgresso] = useState(PROGRESSO_INICIAL);
-  const [especial, setEspecial] = useState(null); // "já respondeu hoje" ou mensagem (FM3)
+  const [especial, setEspecial] = useState(null); // "já respondeu hoje"
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [tentativa, setTentativa] = useState(0);
+  const [parado, setParado] = useState(false); // tablet sem toque no meio da pesquisa
 
   const avancar = useCallback(
     (novo, id) => {
@@ -62,6 +69,7 @@ export default function PaginaPesquisa({ canal }) {
       sessaoId.current = null;
       setProgresso(PROGRESSO_INICIAL);
       setEspecial(null);
+      setParado(false);
       setAviso(mensagem ?? null);
     },
     [canal, slug],
@@ -127,6 +135,12 @@ export default function PaginaPesquisa({ canal }) {
 
   const passo = carga.estado === 'pronto' ? proximoPasso(carga.pesquisa, progresso) : null;
   const chavePasso = especial?.tipo ?? `${passo?.tipo}-${passo?.pergunta?.id ?? ''}`;
+
+  // Tablet parado no meio da pesquisa, fora da abertura e do agradecimento (RF13)
+  const noMeio = passo && !especial && !['abertura', 'fim'].includes(passo.tipo);
+  useInatividade(TABLET_INATIVIDADE_SEGUNDOS, canal === 'TABLET' && noMeio && !parado, () =>
+    setParado(true),
+  );
 
   useEffect(() => {
     window.scrollTo?.(0, 0);
@@ -200,16 +214,12 @@ export default function PaginaPesquisa({ canal }) {
             setEspecial(null);
           }}
           aoMensagem={() => {
-            sessaoId.current = registro.sessaoId;
-            setEspecial({ tipo: 'mensagem' });
+            avancar(progressoDaSituacao(situacao), registro.sessaoId);
+            setEspecial(null);
           }}
           aoNova={() => recomecar()}
         />
       );
-    }
-    if (especial?.tipo === 'mensagem') {
-      // Provisório: a tela de mensagem é da FM3
-      return <TelaIndisponivel titulo="Deixe sua mensagem" texto="Disponível em breve." />;
     }
 
     switch (passo.tipo) {
@@ -264,11 +274,37 @@ export default function PaginaPesquisa({ canal }) {
         return (
           <TelaNota
             {...comum}
-            aoContinuar={(nota) => concluirPasso({ nota: true }, (id) => api.enviarNota(id, nota))}
+            aoContinuar={(nota) =>
+              concluirPasso({ nota: true, notaValor: nota }, (id) => api.enviarNota(id, nota))
+            }
+          />
+        );
+      case 'mensagem':
+        return (
+          <TelaMensagem
+            {...comum}
+            final={finalPelaNota(progresso.notaValor)}
+            aoEncerrar={() => concluirPasso({ mensagem: true })}
+            aoEnviar={(dados, avisos) =>
+              executar(async () => {
+                try {
+                  await api.enviarManifestacao(sessaoId.current, dados);
+                } catch (falha) {
+                  if (falha.codigo === 'TELEFONE_INVALIDO') {
+                    return avisos.telefoneInvalido(falha.detalhes?.[0]?.mensagem ?? falha.mensagem);
+                  }
+                  if (falha.codigo === 'TERMO_DESATUALIZADO') {
+                    return avisos.termoDesatualizado(await termosVigentes());
+                  }
+                  throw falha;
+                }
+                return avancar({ ...progresso, mensagem: true }, sessaoId.current);
+              })
+            }
           />
         );
       default:
-        return <TelaObrigado />;
+        return <TelaAgradecimento noTablet={canal === 'TABLET'} aoVoltar={() => recomecar()} />;
     }
   }
 
@@ -283,7 +319,7 @@ export default function PaginaPesquisa({ canal }) {
           variante="erro"
           acao={
             erro.tentar && (
-              <Botao variante="secundario" onClick={erro.tentar}>
+              <Botao grande variante="secundario" onClick={erro.tentar}>
                 Tentar de novo
               </Botao>
             )
@@ -292,6 +328,24 @@ export default function PaginaPesquisa({ canal }) {
           {erro.mensagem}
         </Aviso>
       )}
+      <Modal
+        aberto={parado}
+        aoFechar={() => setParado(false)}
+        titulo="Deseja continuar a pesquisa?"
+        ocultarFechar
+        rodape={
+          <>
+            <Botao grande variante="secundario" onClick={() => recomecar()}>
+              Nova pesquisa
+            </Botao>
+            <Botao grande onClick={() => setParado(false)}>
+              Continuar pesquisa
+            </Botao>
+          </>
+        }
+      >
+        <p className={estilos.texto}>Ninguém tocou na tela nos últimos 2 minutos.</p>
+      </Modal>
     </>
   );
 }
