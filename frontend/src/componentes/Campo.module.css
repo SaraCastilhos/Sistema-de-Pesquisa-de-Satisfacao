@@ -67,5 +67,5 @@ textarea.controle {
 
 .grande .ajuda,
 .grande .erro {
-  font-size: var(--tamanho-medio);
+  font-size: var(--tamanho-pesquisa);
 }

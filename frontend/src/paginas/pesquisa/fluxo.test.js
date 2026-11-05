@@ -36,7 +36,9 @@ describe('proximoPasso', () => {
       'Médico',
     );
     expect(tipo(PESQUISA, { ...depoisDasFixas, perguntas: [10, 11, 20] })).toBe('nota');
-    expect(tipo(PESQUISA, { ...depoisDasFixas, perguntas: [10, 11, 20], nota: true })).toBe('fim');
+    const comNota = { ...depoisDasFixas, perguntas: [10, 11, 20], nota: true };
+    expect(tipo(PESQUISA, comNota)).toBe('mensagem');
+    expect(tipo(PESQUISA, { ...comNota, mensagem: true })).toBe('fim');
   });
 
   it('sem etapas, vai direto à nota', () => {
@@ -59,25 +61,38 @@ describe('avaliarTelaFixa', () => {
   });
 
   it('no celular, dia sem período ou período sem dia bloqueia', () => {
-    const soDia = { ...vazio, diaEscolhido: true, dataValida: true, perfil: 'PACIENTE' };
+    const base = { ...vazio, perfil: 'PACIENTE', tipoAtendimento: 'SUS' };
+    const soDia = { ...base, diaEscolhido: true, dataValida: true };
     expect(avaliarTelaFixa(soDia)).toEqual({ dataIncompleta: true, podeContinuar: false });
-    expect(avaliarTelaFixa({ ...vazio, turnoId: 1 }).podeContinuar).toBe(false);
+    expect(avaliarTelaFixa({ ...base, turnoId: 1 }).podeContinuar).toBe(false);
   });
 
   it('"Outro dia" sem data preenchida bloqueia', () => {
-    const outroDia = { ...vazio, diaEscolhido: true, turnoId: 1 };
+    const outroDia = {
+      ...vazio,
+      perfil: 'PACIENTE',
+      tipoAtendimento: 'SUS',
+      diaEscolhido: true,
+      turnoId: 1,
+    };
     expect(avaliarTelaFixa(outroDia).dataIncompleta).toBe(true);
   });
 
-  it('no celular, dia e período juntos bastam', () => {
+  it('dia e período sozinhos não bastam: falta perfil e tipo de atendimento', () => {
     const data = { ...vazio, diaEscolhido: true, dataValida: true, turnoId: 1 };
-    expect(avaliarTelaFixa(data).podeContinuar).toBe(true);
+    expect(avaliarTelaFixa(data).podeContinuar).toBe(false);
   });
 
-  it('perfil ou tipo de atendimento sozinhos bastam, nos dois canais', () => {
-    expect(avaliarTelaFixa({ ...vazio, perfil: 'FAMILIAR' }).podeContinuar).toBe(true);
-    const tablet = { ...vazio, pedirData: false, tipoAtendimento: 'SUS' };
-    expect(avaliarTelaFixa(tablet).podeContinuar).toBe(true);
+  it('só um dos dois (perfil ou tipo de atendimento) não avança, nos dois canais', () => {
+    expect(avaliarTelaFixa({ ...vazio, perfil: 'FAMILIAR' }).podeContinuar).toBe(false);
+    const tablet = { ...vazio, pedirData: false };
+    expect(avaliarTelaFixa({ ...tablet, tipoAtendimento: 'SUS' }).podeContinuar).toBe(false);
+  });
+
+  it('perfil e tipo de atendimento juntos avançam, com ou sem data', () => {
+    const dois = { ...vazio, perfil: 'FAMILIAR', tipoAtendimento: 'SUS' };
+    expect(avaliarTelaFixa(dois).podeContinuar).toBe(true);
+    expect(avaliarTelaFixa({ ...dois, pedirData: false }).podeContinuar).toBe(true);
   });
 });
 
@@ -128,8 +143,15 @@ describe('retomada', () => {
     expect(tipo(PESQUISA, progressoDaSituacao(situacao()))).toBe('fixas');
   });
 
-  it('com a nota, vai ao fim', () => {
-    expect(tipo(PESQUISA, progressoDaSituacao(situacao({ temNota: true })))).toBe('fim');
+  it('com a nota, vai à mensagem', () => {
+    expect(tipo(PESQUISA, progressoDaSituacao(situacao({ temNota: true })))).toBe('mensagem');
+  });
+
+  it('atualizar a página no agradecimento não volta à mensagem', () => {
+    const local = { ...depoisDasFixas, nota: true, notaValor: 9, mensagem: true };
+    const progresso = juntarProgresso(local, progressoDaSituacao(situacao({ temNota: true })));
+    expect(tipo(PESQUISA, progresso)).toBe('fim');
+    expect(progresso.notaValor).toBe(9);
   });
 
   it('a tela fixa pulada na aba não volta depois de atualizar a página', () => {

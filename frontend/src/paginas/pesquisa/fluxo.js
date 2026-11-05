@@ -1,6 +1,6 @@
 /**
  * Fluxo da pesquisa como função pura: dado o conteúdo e o progresso, devolve o passo atual.
- * Ordem: abertura → perguntas fixas (numa tela só) → perguntas de cada etapa → nota → fim.
+ * Ordem: abertura → perguntas fixas (numa tela só) → perguntas de cada etapa → nota → mensagem → fim.
  * Os componentes só mostram o passo devolvido.
  *
  * progresso = {
@@ -8,6 +8,8 @@
  *   fixas,      // tela das perguntas fixas concluída ou pulada
  *   perguntas,  // ids das perguntas respondidas ou puladas
  *   nota,       // nota enviada
+ *   notaValor,  // a nota dada, para o final da mensagem; a API não a devolve na retomada
+ *   mensagem,   // mensagem enviada ou encerrada sem mensagem
  * }
  */
 
@@ -16,6 +18,8 @@ export const PROGRESSO_INICIAL = {
   fixas: false,
   perguntas: [],
   nota: false,
+  notaValor: null,
+  mensagem: false,
 };
 
 export function proximoPasso(pesquisa, progresso) {
@@ -28,12 +32,13 @@ export function proximoPasso(pesquisa, progresso) {
     }
     return { tipo: 'nota' };
   }
-  return { tipo: 'fim' };
+  return progresso.mensagem ? { tipo: 'fim' } : { tipo: 'mensagem' };
 }
 
 /**
- * Regra do "Continuar" da tela fixa. A data (só no celular) é opcional, mas a API exige o dia e o
- * período juntos, então metade dela bloqueia. Sem nada escolhido, o caminho é o "Pular".
+ * Regra do "Continuar" da tela fixa: perfil e tipo de atendimento são os dois obrigatórios para
+ * avançar. A data (só no celular) é opcional, mas a API exige o dia e o período juntos, então
+ * metade dela bloqueia. Quem não quer responder usa o "Pular".
  */
 export function avaliarTelaFixa({
   pedirData,
@@ -47,7 +52,7 @@ export function avaliarTelaFixa({
   const dataIncompleta = pedirData && (diaEscolhido || turnoId !== null) && !dataCompleta;
   return {
     dataIncompleta,
-    podeContinuar: !dataIncompleta && Boolean(dataCompleta || perfil || tipoAtendimento),
+    podeContinuar: !dataIncompleta && Boolean(perfil && tipoAtendimento),
   };
 }
 
@@ -77,6 +82,8 @@ export function progressoDaSituacao(situacao) {
       situacao.temNota,
     perguntas,
     nota: situacao.temNota,
+    notaValor: null,
+    mensagem: false,
   };
 }
 
@@ -87,5 +94,7 @@ export function juntarProgresso(local, daApi) {
     fixas: Boolean(local.fixas) || daApi.fixas,
     perguntas: [...new Set([...local.perguntas, ...daApi.perguntas])],
     nota: local.nota || daApi.nota,
+    notaValor: local.notaValor ?? null,
+    mensagem: Boolean(local.mensagem),
   };
 }

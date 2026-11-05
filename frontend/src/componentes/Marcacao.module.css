@@ -33,10 +33,11 @@
 }
 
 .grande .ajuda {
-  font-size: var(--tamanho-medio);
+  font-size: var(--tamanho-pesquisa);
 }
 
 .grande .caixa {
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
   margin: 0;
