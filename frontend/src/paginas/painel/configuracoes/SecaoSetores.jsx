@@ -71,7 +71,9 @@ export default function SecaoSetores() {
       await carregar();
       setMensagem({ tipo: 'sucesso', texto: 'Setor criado.' });
     } catch (erro) {
-      setMensagem(mensagemDeErro(erro, ERROS));
+      // Sem endereço digitado, ele saiu do nome: o conflito é, para quem cadastra, de nome repetido
+      const erros = endereco.trim() ? ERROS : { ...ERROS, SLUG_EM_USO: ERROS.NOME_EM_USO };
+      setMensagem(mensagemDeErro(erro, erros));
     } finally {
       setCriando(false);
     }
