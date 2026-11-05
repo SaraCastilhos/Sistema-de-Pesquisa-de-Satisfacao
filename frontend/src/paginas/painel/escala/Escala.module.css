@@ -1,0 +1,124 @@
+.pagina {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Abas */
+.abas {
+  display: flex;
+  gap: var(--espaco-1);
+  margin-bottom: var(--espaco-2);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.abas button {
+  padding: var(--espaco-3) var(--espaco-4);
+  margin-bottom: -1px;
+  font-size: var(--tamanho-texto);
+  font-weight: 500;
+  color: var(--cor-texto-secundario);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.abas button:hover {
+  color: var(--cor-texto);
+}
+
+.abas .abaAtiva {
+  color: var(--cor-marca);
+  border-bottom-color: var(--cor-marca);
+}
+
+/* Equipes */
+.novaEquipe {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+}
+
+.novaEquipe > :first-child {
+  flex: 1;
+}
+
+.listaEquipes {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-cartao);
+}
+
+.linhaEquipe {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.linhaEquipe:last-child {
+  border-bottom: 0;
+}
+
+.nomeEquipe {
+  flex: 1;
+  font-weight: 500;
+}
+
+.acoes {
+  display: flex;
+  gap: var(--espaco-1);
+}
+
+.renomear {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  gap: var(--espaco-2);
+}
+
+.renomear > :first-child {
+  flex: 1;
+}
+
+/* Escala */
+.envio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+}
+
+.arquivo {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--espaco-1);
+  min-width: 240px;
+  font-size: var(--tamanho-texto);
+}
+
+.arquivo label {
+  font-size: var(--tamanho-pequeno);
+  font-weight: 500;
+}
+
+.gradeSetor h3 {
+  margin-bottom: var(--espaco-2);
+  font-size: var(--tamanho-texto);
+}
+
+.vazio {
+  font-size: var(--tamanho-texto);
+  color: var(--cor-texto-secundario);
+}
+
+/* Atendimentos */
+.campoQuantidade {
+  max-width: 180px;
+}
