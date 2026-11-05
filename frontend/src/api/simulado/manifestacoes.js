@@ -322,3 +322,132 @@ export async function anexo(id, anexoId) {
     '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160"><rect width="240" height="160" fill="#eef0f3"/><text x="120" y="86" font-family="sans-serif" font-size="14" text-anchor="middle" fill="#5f656e">Foto simulada</text></svg>';
   return new Blob([imagem], { type: 'image/svg+xml' });
 }
+
+// ---- Ações do chamado (FS6): mudam os chamados em memória e devolvem o detalhe inteiro ----
+
+const erro = (status, codigo, mensagem) => new ErroApi({ status, codigo, mensagem });
+const aberto = (c) => c.status === 'NOVA' || c.status === 'EM_CONTATO';
+
+function chamadoAberto(id) {
+  const chamado = CHAMADOS.find((c) => c.id === Number(id));
+  if (!chamado) throw naoEncontrado();
+  if (!aberto(chamado)) {
+    throw erro(409, 'CHAMADO_JA_FINALIZADO', 'Este chamado já foi finalizado.');
+  }
+  return chamado;
+}
+
+const copiaDoDetalhe = (chamado) => detalhe(chamado.id);
+
+export async function classificar(id, tipo) {
+  const chamado = CHAMADOS.find((c) => c.id === Number(id));
+  if (!chamado) throw naoEncontrado();
+  chamado.tipo = tipo;
+  return copiaDoDetalhe(chamado);
+}
+
+export async function registrarTentativa(id, { realizadaEm, resultado, observacao }) {
+  const chamado = chamadoAberto(id);
+  if (!chamado.pediuRetorno || !chamado.telefone) {
+    throw erro(422, 'CHAMADO_SEM_TELEFONE', 'Este chamado não tem telefone para contato.');
+  }
+  if (new Date(realizadaEm).getTime() > Date.now() + 5 * 60 * 1000) {
+    throw erro(422, 'DATA_FUTURA', 'A data da tentativa não pode ser futura.');
+  }
+  chamado.tentativas.push({
+    id: Math.max(0, ...CHAMADOS.flatMap((c) => c.tentativas.map((t) => t.id))) + 1,
+    realizadaEm,
+    resultado,
+    observacao: observacao?.trim() || null,
+    usuario: SUPER_ADMIN,
+  });
+  chamado.tentativasContato = chamado.tentativas.length;
+  chamado.status = 'EM_CONTATO';
+  delete chamado.horasUteisSemContato;
+  return copiaDoDetalhe(chamado);
+}
+
+export async function finalizar(id, { status, desfecho }) {
+  const chamado = chamadoAberto(id);
+  if (!chamado.tipo) {
+    throw erro(422, 'TIPO_NAO_DEFINIDO', 'Defina o tipo da manifestação antes de finalizar.');
+  }
+  if (status === 'SEM_RETORNO') {
+    if (!chamado.pediuRetorno) {
+      throw erro(422, 'CHAMADO_SEM_TELEFONE', 'Um chamado anônimo não fica "Sem retorno".');
+    }
+    if (chamado.tentativas.filter((t) => t.resultado === 'SEM_SUCESSO').length < 3) {
+      throw erro(
+        422,
+        'CHAMADO_SEM_TENTATIVAS_SUFICIENTES',
+        'O status "Sem retorno" exige pelo menos 3 tentativas de contato sem sucesso.',
+      );
+    }
+  }
+  if (!desfecho?.trim()) {
+    throw erro(400, 'DADOS_INVALIDOS', 'Descreva o desfecho do chamado.');
+  }
+  chamado.status = status;
+  chamado.desfecho = desfecho.trim();
+  chamado.finalizadaEm = new Date().toISOString();
+  chamado.telefone = null; // RN07
+  delete chamado.horasUteisSemContato;
+  return copiaDoDetalhe(chamado);
+}
+
+const SETORES_SIMULADOS = new Map(
+  [ENDOSCOPIA, INTERNACAO, PRONTO_ATENDIMENTO, setor(4, 'Raio-X')].map((s) => [s.id, s]),
+);
+
+export async function registrar(dados) {
+  if (new Date(`${dados.dataOcorrencia}T00:00:00-03:00`) > new Date()) {
+    throw erro(422, 'DATA_FUTURA', 'A data da ocorrência não pode ser futura.');
+  }
+  if (dados.telefone && dados.termoId !== 1) {
+    throw erro(409, 'TERMO_DESATUALIZADO', 'Os termos de privacidade mudaram. Aceite de novo.');
+  }
+  const id = Math.max(...CHAMADOS.map((c) => c.id)) + 1;
+  const agora = new Date().toISOString();
+  const chamado = {
+    ...base,
+    origem: dados.origem,
+    tipo: dados.tipo,
+    id,
+    protocolo: id,
+    setor: SETORES_SIMULADOS.get(dados.setorId) ?? setor(dados.setorId, `Setor ${dados.setorId}`),
+    etapa: dados.etapaId ? { id: dados.etapaId, nome: `Etapa ${dados.etapaId}` } : null,
+    turno: dados.turnoId === 2 ? NOITE : dados.turnoId === 1 ? DIA : null,
+    dataOcorrencia: dados.dataOcorrencia,
+    texto: dados.texto ?? null,
+    profissionalCitado: dados.profissionalCitado ?? null,
+    pediuRetorno: Boolean(dados.telefone),
+    telefone: dados.telefone ? dados.telefone.replace(/\D/g, '') : null,
+    consentimentoEm: dados.telefone ? agora : null,
+    termoPrivacidade: dados.telefone ? { id: 1, versao: 1 } : null,
+    registradaPor: SUPER_ADMIN,
+    tentativas: [],
+    anexos: [],
+    criadoEm: agora,
+    atualizadoEm: agora,
+  };
+  CHAMADOS.unshift(chamado);
+  return copiaDoDetalhe(chamado);
+}
+
+export async function anexarFoto(id, arquivo) {
+  const chamado = chamadoAberto(id);
+  if (chamado.origem !== 'PAPEL') {
+    throw erro(422, 'ANEXO_SO_PAPEL', 'Só manifestações recebidas por escrito aceitam fotos.');
+  }
+  if (chamado.anexos.length >= 3) {
+    throw erro(422, 'LIMITE_DE_FOTOS', 'Este chamado já tem 3 fotos.');
+  }
+  chamado.anexos.push({
+    id: Math.max(0, ...chamado.anexos.map((a) => a.id)) + 1,
+    tipoMime: 'image/svg+xml', // o anexo simulado sempre devolve a mesma imagem
+    tamanhoBytes: arquivo?.size ?? 0,
+    criadoEm: new Date().toISOString(),
+    enviadoPor: SUPER_ADMIN,
+  });
+  return copiaDoDetalhe(chamado);
+}
