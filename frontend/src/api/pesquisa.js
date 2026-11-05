@@ -46,6 +46,15 @@ const real = {
       requisitar('PUT', `/api/publico/sessoes/${id}/nota`, { corpo: { nota } }),
       'NOTA_JA_REGISTRADA',
     ),
+
+  // Sem telefone, vai anônima; com telefone, leva o aceite e a versão dos termos (RN06)
+  enviarManifestacao: (id, { texto, telefone, termoId }) =>
+    requisitar('POST', `/api/publico/sessoes/${id}/manifestacoes`, {
+      corpo: {
+        ...(texto && { texto }),
+        ...(telefone && { telefone, aceiteTermos: true, termoId }),
+      },
+    }),
 };
 
 export const carregarPesquisa = escolherFonte(real.carregarPesquisa, simulado.carregarPesquisa);
@@ -61,3 +70,7 @@ export const informarRespondente = escolherFonte(
 );
 export const responder = escolherFonte(real.responder, simulado.responder);
 export const enviarNota = escolherFonte(real.enviarNota, simulado.enviarNota);
+export const enviarManifestacao = escolherFonte(
+  real.enviarManifestacao,
+  simulado.enviarManifestacao,
+);

@@ -125,3 +125,10 @@ export async function enviarNota(id, nota) {
   salvar();
   return { nota };
 }
+
+export async function enviarManifestacao(id) {
+  await espera();
+  sessao(id);
+  const protocolo = Date.now() % 100000;
+  return { id: protocolo, protocolo };
+}
