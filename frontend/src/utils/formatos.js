@@ -3,10 +3,12 @@
 const LOCALIDADE = 'pt-BR';
 const FUSO = 'America/Sao_Paulo';
 
-// "2026-10-12" (só data) vira meio-dia UTC, para não cair no dia anterior no fuso de Brasília
+// "2026-10-12" (só data) e "2026-10" (só mês) viram meio-dia UTC, para não cair no dia (ou no
+// mês) anterior no fuso de Brasília
 function paraData(valor) {
-  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
-    return new Date(`${valor}T12:00:00Z`);
+  if (typeof valor === 'string' && /^\d{4}-\d{2}(-\d{2})?$/.test(valor)) {
+    const dia = valor.length === 7 ? `${valor}-01` : valor;
+    return new Date(`${dia}T12:00:00Z`);
   }
   return valor instanceof Date ? valor : new Date(valor);
 }
