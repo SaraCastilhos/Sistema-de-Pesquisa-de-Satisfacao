@@ -70,6 +70,8 @@ function tabela(doc, colunas, linhas) {
       .strokeColor('#CCCCCC')
       .lineWidth(0.5)
       .stroke();
+    // A última célula deixa doc.x na coluna da direita; sem voltar, o texto seguinte herda o recuo
+    doc.x = esquerda;
     doc.y = y + altura;
   };
 

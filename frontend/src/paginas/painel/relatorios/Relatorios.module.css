@@ -1,0 +1,113 @@
+.grade {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--espaco-4);
+}
+
+.previa {
+  min-width: 0;
+  padding: var(--espaco-8);
+  background: var(--cor-cartao);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-cartao);
+  box-shadow: var(--sombra-cartao);
+}
+
+.cabecalho {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espaco-2);
+  padding-bottom: var(--espaco-6);
+  border-bottom: 1px solid var(--cor-borda);
+  text-align: center;
+}
+
+.cabecalho h2 {
+  font-size: var(--tamanho-titulo-secao);
+}
+
+.cabecalho p {
+  color: var(--cor-texto-secundario);
+}
+
+.logo {
+  width: 130px;
+  margin-bottom: var(--espaco-2);
+}
+
+.numeros {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--espaco-4);
+  margin: 0;
+  padding-top: var(--espaco-6);
+}
+
+.numeros dt {
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.numeros dd {
+  margin: var(--espaco-1) 0 0;
+  font-family: var(--fonte-titulo);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.numeros dd.variacao {
+  font-family: var(--fonte-texto);
+  font-size: var(--tamanho-legenda);
+  font-weight: 500;
+  color: var(--cor-texto-secundario);
+}
+
+.numeros dd.alta {
+  color: var(--cor-sucesso);
+}
+
+.numeros dd.queda {
+  color: var(--cor-perigo);
+}
+
+.legendaComparacao {
+  margin-top: var(--espaco-3);
+  padding-bottom: var(--espaco-6);
+  border-bottom: 1px solid var(--cor-borda);
+  font-size: var(--tamanho-legenda);
+  color: var(--cor-texto-secundario);
+}
+
+.tituloTabela {
+  margin: var(--espaco-6) 0 var(--espaco-4);
+  font-size: var(--tamanho-medio);
+}
+
+.preparar {
+  position: sticky;
+  top: var(--espaco-4);
+}
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.dica {
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+@media (max-width: 1000px) {
+  .grade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .preparar {
+    position: static;
+    order: -1;
+  }
+}

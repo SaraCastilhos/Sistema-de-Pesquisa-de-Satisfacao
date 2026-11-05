@@ -21,13 +21,9 @@ const real = {
       { competencia, setorId },
       `relatorio-${competencia}.pdf`,
     ),
-
-  // O arquivo turnos.js é da Sara (FS2); quando ele existir, troque por listarTurnos de lá
-  listarTurnos: () => requisitar('GET', '/api/turnos', { consulta: { ativo: 'true' } }),
 };
 
 export const indicadores = escolherFonte(real.indicadores, simulado.indicadores);
 export const notasPorEquipe = escolherFonte(real.notasPorEquipe, simulado.notasPorEquipe);
 export const planilha = escolherFonte(real.planilha, simulado.planilha);
 export const relatorioMensal = escolherFonte(real.relatorioMensal, simulado.relatorioMensal);
-export const listarTurnosDoFiltro = escolherFonte(real.listarTurnos, simulado.listarTurnos);

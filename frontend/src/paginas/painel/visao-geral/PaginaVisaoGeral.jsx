@@ -4,14 +4,9 @@ import { useSessao } from '../../../sessao/contexto';
 import { ChevronDown, Download, Monitor } from 'lucide-react';
 import { Aviso, Botao, CabecalhoPagina, Carregando } from '../../../componentes';
 import { listarEtapas } from '../../../api/etapas';
-import {
-  indicadores,
-  listarTurnosDoFiltro,
-  notasPorEquipe,
-  planilha,
-  relatorioMensal,
-} from '../../../api/indicadores';
+import { indicadores, notasPorEquipe, planilha, relatorioMensal } from '../../../api/indicadores';
 import { listarSetores } from '../../../api/setores';
+import { listarTurnos } from '../../../api/turnos';
 import useAtualizacaoAutomatica from '../../../hooks/useAtualizacaoAutomatica';
 import { formatarHora, formatarMes } from '../../../utils/formatos';
 import BarraFiltros from './BarraFiltros';
@@ -44,7 +39,7 @@ export default function PaginaVisaoGeral() {
 
   // Setores (o Gestor só recebe os dele) e turnos para os filtros
   useEffect(() => {
-    Promise.all([listarSetores({ ativo: true }), listarTurnosDoFiltro()])
+    Promise.all([listarSetores({ ativo: true }), listarTurnos({ ativo: true })])
       .then(([setores, turnos]) => setOpcoes({ setores, turnos }))
       .catch(() => {
         // Sem as listas, os filtros ficam só com as opções fixas; os indicadores avisam o erro

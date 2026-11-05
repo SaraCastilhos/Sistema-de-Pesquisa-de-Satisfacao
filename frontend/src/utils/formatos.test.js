@@ -27,6 +27,7 @@ describe('formatos', () => {
 
   it('formata mês com inicial maiúscula', () => {
     expect(formatarMes('2026-10-01')).toBe('Outubro de 2026');
+    expect(formatarMes('2026-11')).toBe('Novembro de 2026');
   });
 
   it('formata hora em 24 h no fuso de Brasília', () => {

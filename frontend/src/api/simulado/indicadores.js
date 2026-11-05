@@ -169,10 +169,3 @@ export async function planilha() {
 export async function relatorioMensal(competencia) {
   baixarSimulado(`relatorio-${competencia}-simulado.txt`);
 }
-
-export async function listarTurnos() {
-  return [
-    { id: 1, nome: 'Dia', horaInicio: '07:00', horaFim: '19:00', ativo: true },
-    { id: 2, nome: 'Noite', horaInicio: '19:00', horaFim: '07:00', ativo: true },
-  ];
-}
