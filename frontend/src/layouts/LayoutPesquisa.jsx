@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link, Outlet } from 'react-router';
+import { Link, Outlet, useMatch } from 'react-router';
 import { Lock, ShieldCheck, Volume2, VolumeX } from 'lucide-react';
 import logo from '../assets/logo-fhdod.jpg';
 import { tocarBipe } from '../paginas/pesquisa/som';
@@ -12,6 +12,8 @@ import estilos from './LayoutPesquisa.module.css';
  */
 export default function LayoutPesquisa() {
   const [setor, definirSetor] = useState(null);
+  // Termos (Figma): só o logo e o cartão
+  const emTermos = useMatch('/termos');
   const [somLigado, setSomLigado] = useState(false);
 
   const alternarSom = useCallback(() => {
@@ -34,21 +36,23 @@ export default function LayoutPesquisa() {
           alt="FHDOD — Fundação Hospitalar Dr. Oswaldo Diesel"
           className={estilos.logo}
         />
-        <div className={estilos.acoesTopo}>
-          <span className={estilos.anonima}>
-            <Lock aria-hidden="true" />
-            Pesquisa anônima
-          </span>
-          <button
-            type="button"
-            className={estilos.som}
-            onClick={alternarSom}
-            aria-pressed={somLigado}
-            aria-label={somLigado ? 'Desligar som de confirmação' : 'Ligar som de confirmação'}
-          >
-            {somLigado ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
-          </button>
-        </div>
+        {!emTermos && (
+          <div className={estilos.acoesTopo}>
+            <span className={estilos.anonima}>
+              <Lock aria-hidden="true" />
+              Pesquisa anônima
+            </span>
+            <button
+              type="button"
+              className={estilos.som}
+              onClick={alternarSom}
+              aria-pressed={somLigado}
+              aria-label={somLigado ? 'Desligar som de confirmação' : 'Ligar som de confirmação'}
+            >
+              {somLigado ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
+            </button>
+          </div>
+        )}
       </header>
 
       <main className={estilos.principal}>
@@ -61,16 +65,20 @@ export default function LayoutPesquisa() {
         <div className={estilos.cartao}>
           <Outlet context={contexto} />
         </div>
-        <p className={estilos.privacidade}>
-          <ShieldCheck aria-hidden="true" />
-          Suas respostas não identificam você. O contato, se informado, é privado à Ouvidoria.
-        </p>
+        {!emTermos && (
+          <p className={estilos.privacidade}>
+            <ShieldCheck aria-hidden="true" />
+            Suas respostas não identificam você. O contato, se informado, é privado à Ouvidoria.
+          </p>
+        )}
       </main>
 
-      <footer className={estilos.rodape}>
-        <span>Fundação Hospitalar Dr. Oswaldo Diesel</span>
-        <Link to="/termos">Termos e privacidade</Link>
-      </footer>
+      {!emTermos && (
+        <footer className={estilos.rodape}>
+          <span>Fundação Hospitalar Dr. Oswaldo Diesel</span>
+          <Link to="/termos">Termos e privacidade</Link>
+        </footer>
+      )}
     </div>
   );
 }
