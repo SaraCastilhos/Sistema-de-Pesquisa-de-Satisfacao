@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { Aviso, Botao, CabecalhoPagina, Carregando } from '../../../componentes';
 import { alertas as buscarAlertas, listar } from '../../../api/manifestacoes';
 import { listarSetores } from '../../../api/setores';
 import { listarTurnos } from '../../../api/turnos';
 import DetalheChamado from './DetalheChamado';
 import FiltrosOuvidoria from './FiltrosOuvidoria';
+import RegistrarManifestacao from './RegistrarManifestacao';
 import TabelaChamados from './TabelaChamados';
 import { comFiltro, lerFiltros, paraConsulta, paraParametros } from './filtros';
 import estilos from './Ouvidoria.module.css';
@@ -28,6 +29,7 @@ export default function PaginaOuvidoria() {
   const [verAtrasados, setVerAtrasados] = useState(false);
   const [opcoes, setOpcoes] = useState({ setores: [], turnos: [] });
   const [aberto, setAberto] = useState(null);
+  const [registrando, setRegistrando] = useState(false);
 
   // Setores e turnos para os filtros; sem eles, os filtros ficam só com "Todos"
   useEffect(() => {
@@ -70,6 +72,15 @@ export default function PaginaOuvidoria() {
   }, []);
 
   const fecharDetalhe = useCallback(() => setAberto(null), []);
+  const recarregar = useCallback(() => setRecarga((n) => n + 1), []);
+  const fecharRegistro = useCallback(() => setRegistrando(false), []);
+
+  // Registrado: a lista recarrega e o detalhe abre com a resposta da API (e o aviso, se uma foto falhou)
+  function aoRegistrar(chamado) {
+    setRegistrando(false);
+    recarregar();
+    setAberto(chamado);
+  }
 
   function mudarFiltro(campo, valor) {
     definirParametros(paraParametros(comFiltro(filtros, campo, valor)), { replace: true });
@@ -91,9 +102,14 @@ export default function PaginaOuvidoria() {
         titulo="Cada relato merece atenção"
         subtitulo="Acompanhe as manifestações e o retorno de cada atendimento."
         acoes={
-          <Botao variante="secundario" icone={RefreshCw} onClick={() => setRecarga((n) => n + 1)}>
-            Atualizar
-          </Botao>
+          <>
+            <Botao variante="secundario" icone={RefreshCw} onClick={recarregar}>
+              Atualizar
+            </Botao>
+            <Botao icone={Plus} onClick={() => setRegistrando(true)}>
+              Registrar manifestação
+            </Botao>
+          </>
         }
       />
 
@@ -158,7 +174,14 @@ export default function PaginaOuvidoria() {
         </>
       )}
 
-      <DetalheChamado chamado={aberto} aoFechar={fecharDetalhe} />
+      <DetalheChamado chamado={aberto} aoFechar={fecharDetalhe} aoMudar={recarregar} />
+      <RegistrarManifestacao
+        aberto={registrando}
+        aoFechar={fecharRegistro}
+        setores={opcoes.setores}
+        turnos={opcoes.turnos}
+        aoRegistrar={aoRegistrar}
+      />
     </div>
   );
 }
