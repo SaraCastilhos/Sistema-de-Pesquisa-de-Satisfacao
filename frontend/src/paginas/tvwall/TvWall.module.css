@@ -1,0 +1,199 @@
+/* Tudo em em: 1em vem de LayoutTv.module.css e acompanha o tamanho da tela (RNF03). */
+.corpo,
+.duasColunas {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4em;
+}
+
+.duasColunas {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 5fr);
+  padding-inline: 3em;
+}
+
+/* Texto à esquerda do gráfico (Figma) */
+.textoEvolucao h2 {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 2.3em;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--cor-texto);
+}
+
+.textoEvolucao p {
+  margin: 3em 0 0;
+  font-size: 1.25em;
+  color: var(--cor-texto-secundario);
+}
+
+.textoEvolucao strong {
+  display: block;
+  margin-top: 0.15em;
+  font-family: var(--fonte-titulo);
+  font-size: 4.2em;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--cor-marca);
+}
+
+/* Coluna de texto da evolução e dos rankings */
+.chamada h2,
+.textoQr h2 {
+  margin: 0;
+  font-family: var(--fonte-titulo);
+  font-size: 2.6em;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--cor-texto);
+}
+
+.subtitulo {
+  margin: 0.8em 0 0;
+  font-size: 1.2em;
+  color: var(--cor-texto-secundario);
+}
+
+/* O gráfico preenche o espaço que sobrar: o filho absoluto dá a altura ao ResponsiveContainer */
+.grafico {
+  position: relative;
+  align-self: stretch;
+  min-height: 0;
+}
+
+.grafico > div {
+  position: absolute;
+  inset: 0;
+}
+
+.grafico :global(.recharts-text) {
+  font-size: 0.9em;
+  fill: var(--cor-texto-secundario);
+}
+
+.grafico :global(.recharts-label) {
+  font-size: 1em;
+  font-weight: 700;
+  fill: var(--cor-texto);
+}
+
+/* Setores e etapas */
+.ranking {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--cor-borda);
+}
+
+.ranking li {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 5fr) minmax(0, 4fr) 5em;
+  align-items: center;
+  gap: 1em;
+  padding-block: 1.05em;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.posicao {
+  font-weight: 600;
+  color: var(--cor-texto-secundario);
+}
+
+.nome {
+  font-size: 1.25em;
+  font-weight: 600;
+  color: var(--cor-texto);
+}
+
+.barra {
+  height: 0.55em;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--cor-superficie-forte);
+}
+
+.barra span {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--cor-marca);
+}
+
+.ranking strong {
+  font-family: var(--fonte-titulo);
+  font-size: 1.8em;
+  font-weight: 800;
+  text-align: right;
+  color: var(--cor-texto);
+}
+
+/* QR Code */
+.qr {
+  flex-shrink: 0;
+  padding: 1.2em;
+  line-height: 0;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-pesquisa);
+  background: var(--cor-cartao);
+}
+
+.qr svg {
+  width: 20em;
+  height: 20em;
+}
+
+.textoQr {
+  max-width: 34em;
+}
+
+.textoQr p {
+  margin: 0.8em 0 0;
+  font-size: 1.6em;
+  line-height: 1.4;
+  color: var(--cor-texto-secundario);
+}
+
+/* Sem dados ainda */
+.mensagem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 1.6em;
+  text-align: center;
+  color: var(--cor-texto-secundario);
+}
+
+/* A TV não usa esta faixa: só evita rolagem horizontal em quem abrir no celular (CT70) */
+@media (max-width: 899px) {
+  .corpo {
+    flex-direction: column;
+    gap: 2em;
+  }
+
+  .duasColunas {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2em;
+    padding-inline: 0;
+  }
+
+  .grafico {
+    flex: none;
+    height: 24em;
+  }
+
+  .ranking li {
+    grid-template-columns: 2em minmax(0, 1fr) 4em;
+  }
+
+  .barra {
+    display: none;
+  }
+}
