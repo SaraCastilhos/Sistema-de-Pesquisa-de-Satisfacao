@@ -1,0 +1,206 @@
+/* Otimizado para 1366 × 768 (RNF03) */
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.pagina > header {
+  margin-bottom: var(--espaco-2);
+}
+
+/* Barra do topo: setor, abrir, copiar e QR Code */
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espaco-3);
+}
+
+.barra select {
+  min-width: 220px;
+}
+
+.etapas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+/* Etapa como grupo */
+.etapa {
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-cartao);
+  overflow: hidden;
+}
+
+.cabecalhoEtapa {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
+  background: var(--cor-superficie);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.tituloEtapa {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-2);
+}
+
+.tituloEtapa h3 {
+  font-size: var(--tamanho-medio);
+}
+
+.controlesEtapa {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espaco-4);
+}
+
+.acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-1);
+}
+
+.inativa .textoPergunta,
+.inativa h3 {
+  color: var(--cor-texto-secundario);
+}
+
+/* Perguntas */
+.listaPerguntas,
+.listaFixos {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pergunta,
+.fixo {
+  display: flex;
+  align-items: center;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.listaPerguntas > li:last-child {
+  border-bottom: 0;
+}
+
+.arrastar {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  color: var(--cor-texto-secundario);
+}
+
+/* Arrastar e soltar */
+.alca {
+  display: inline-flex;
+  cursor: grab;
+}
+
+.alca:active {
+  cursor: grabbing;
+}
+
+.alcaOff {
+  opacity: 0.4;
+}
+
+.arrastada {
+  opacity: 0.5;
+}
+
+.alvo {
+  box-shadow: inset 0 2px 0 var(--cor-marca);
+}
+
+.textoPergunta {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--tamanho-texto);
+}
+
+.meta {
+  margin-top: 2px;
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.semPerguntas {
+  padding: var(--espaco-4);
+  font-size: var(--tamanho-texto);
+  color: var(--cor-texto-secundario);
+}
+
+/* Itens fixos, no fim do cartão */
+.listaFixos {
+  margin-top: var(--espaco-4);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-cartao);
+  overflow: hidden;
+}
+
+.listaFixos > li:last-child {
+  border-bottom: 0;
+}
+
+.nota {
+  margin-top: var(--espaco-3);
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+/* Janelas */
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.rotuloPrevia {
+  margin-bottom: var(--espaco-2);
+  font-size: var(--tamanho-texto);
+  font-weight: 500;
+}
+
+.previa {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.previa li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espaco-1);
+  padding: var(--espaco-2) var(--espaco-1);
+  background: var(--cor-superficie);
+  border-radius: var(--raio-controle);
+  font-size: var(--tamanho-pequeno);
+  text-align: center;
+  color: var(--cor-texto-secundario);
+}
+
+.previa svg {
+  width: 24px;
+  height: 24px;
+}
+
+@media (max-width: 900px) {
+  .pergunta {
+    flex-wrap: wrap;
+  }
+}
