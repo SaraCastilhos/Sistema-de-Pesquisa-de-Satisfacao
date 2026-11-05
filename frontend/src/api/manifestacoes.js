@@ -53,8 +53,53 @@ async function anexoReal(id, anexoId) {
   return resposta.blob();
 }
 
+/** PUT /api/manifestacoes/:id/tipo: classifica ou corrige o tipo (RN12). Devolve o chamado inteiro. */
+function classificarReal(id, tipo) {
+  return requisitar('PUT', `/api/manifestacoes/${id}/tipo`, { corpo: { tipo } });
+}
+
+/**
+ * POST /api/manifestacoes/:id/tentativas (201): registra uma tentativa de contato. `realizadaEm`
+ * em ISO com fuso; resultado CONTATO_REALIZADO ou SEM_SUCESSO. Devolve o chamado inteiro.
+ */
+function registrarTentativaReal(id, { realizadaEm, resultado, observacao }) {
+  return requisitar('POST', `/api/manifestacoes/${id}/tentativas`, {
+    corpo: { realizadaEm, resultado, observacao },
+  });
+}
+
+/**
+ * POST /api/manifestacoes/:id/finalizacao: encerra o chamado (ENCERRADA ou SEM_RETORNO) e apaga
+ * o telefone (RN07). Devolve o chamado inteiro. 409 CHAMADO_JA_FINALIZADO se outra pessoa chegou antes.
+ */
+function finalizarReal(id, { status, desfecho }) {
+  return requisitar('POST', `/api/manifestacoes/${id}/finalizacao`, {
+    corpo: { status, desfecho },
+  });
+}
+
+/** POST /api/manifestacoes: registra uma manifestação de outro canal (RF17). Devolve o chamado inteiro. */
+function registrarReal(dados) {
+  return requisitar('POST', '/api/manifestacoes', { corpo: dados });
+}
+
+/** POST /api/manifestacoes/:id/anexos: uma foto (campo "foto" do multipart), só origem PAPEL. */
+function anexarFotoReal(id, arquivo) {
+  const corpo = new FormData();
+  corpo.append('foto', arquivo, arquivo.name || 'foto.jpg');
+  return requisitar('POST', `/api/manifestacoes/${id}/anexos`, { corpo });
+}
+
 export const contarNovas = escolherFonte(contarNovasReal, simulado.contarNovas);
 export const listar = escolherFonte(listarReal, simulado.listar);
 export const alertas = escolherFonte(alertasReal, simulado.alertas);
 export const detalhe = escolherFonte(detalheReal, simulado.detalhe);
 export const anexo = escolherFonte(anexoReal, simulado.anexo);
+export const classificar = escolherFonte(classificarReal, simulado.classificar);
+export const registrarTentativa = escolherFonte(
+  registrarTentativaReal,
+  simulado.registrarTentativa,
+);
+export const finalizar = escolherFonte(finalizarReal, simulado.finalizar);
+export const registrar = escolherFonte(registrarReal, simulado.registrar);
+export const anexarFoto = escolherFonte(anexarFotoReal, simulado.anexarFoto);

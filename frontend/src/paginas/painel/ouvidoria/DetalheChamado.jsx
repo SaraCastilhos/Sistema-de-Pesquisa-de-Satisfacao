@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { Aviso, Botao, Carregando, Modal, Selo } from '../../../componentes';
 import { anexo as buscarAnexo, detalhe as buscarDetalhe } from '../../../api/manifestacoes';
 import { formatarData, formatarHora } from '../../../utils/formatos';
+import { AnexarFoto, Classificacao, Finalizacao, Tentativas } from './AcoesChamado';
+import { estaAberto, podeAnexarFoto } from './acoes';
 import {
   formatarProtocolo,
   rotuloOrigem,
-  rotuloResultado,
   rotuloRetorno,
   seloStatus,
   seloTipo,
@@ -58,10 +59,10 @@ function Miniatura({ chamadoId, anexo }) {
   );
 }
 
-function Conteudo({ chamado }) {
-  const tipo = seloTipo(chamado.tipo);
+function Conteudo({ chamado, executar, ocupado }) {
   const status = seloStatus(chamado.status);
-  const finalizado = chamado.status === 'ENCERRADA' || chamado.status === 'SEM_RETORNO';
+  const aberto = estaAberto(chamado);
+  const acoes = { chamado, executar, ocupado };
 
   return (
     <div className={estilos.detalhe}>
@@ -93,7 +94,7 @@ function Conteudo({ chamado }) {
         {chamado.texto ?? <span className={estilos.secundario}>Sem texto escrito.</span>}
       </blockquote>
 
-      {chamado.anexos.length > 0 && (
+      {(chamado.anexos.length > 0 || podeAnexarFoto(chamado)) && (
         <section aria-label="Fotos">
           <h3>Fotos</h3>
           <div className={estilos.miniaturas}>
@@ -103,41 +104,16 @@ function Conteudo({ chamado }) {
                 <Miniatura key={a.id} chamadoId={chamado.id} anexo={a} />
               ))}
           </div>
+          <AnexarFoto {...acoes} />
         </section>
       )}
 
-      {/* A FS6 acrescenta aqui a classificação, o registro de tentativas e a finalização */}
-      <section aria-label="Classificação interna">
-        <h3>Classificação interna</h3>
-        <p>
-          {tipo.variante ? (
-            <Selo variante={tipo.variante}>{tipo.rotulo}</Selo>
-          ) : (
-            <>Tipo da manifestação: {tipo.rotulo}</>
-          )}
-        </p>
-      </section>
+      {/* Quem já foi finalizado só ganha a correção do tipo (indicador); o resto é histórico */}
+      <Classificacao {...acoes} />
+      <Tentativas {...acoes} />
+      {aberto && <Finalizacao key={chamado.id} {...acoes} />}
 
-      <section aria-label="Tentativas de contato">
-        <h3>
-          {chamado.tentativas.length === 1
-            ? '1 tentativa de contato'
-            : `${chamado.tentativas.length} tentativas de contato`}
-        </h3>
-        {chamado.tentativas.length > 0 && (
-          <ol className={estilos.tentativas}>
-            {chamado.tentativas.map((t) => (
-              <li key={t.id}>
-                <strong>{dataEHora(t.realizadaEm)}</strong> · {t.usuario.nome} ·{' '}
-                {rotuloResultado(t.resultado)}
-                {t.observacao && <p className={estilos.secundario}>{t.observacao}</p>}
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
-
-      {finalizado && (
+      {!aberto && (
         <section aria-label="Desfecho">
           <h3>Desfecho</h3>
           <p>{chamado.desfecho}</p>
@@ -150,9 +126,16 @@ function Conteudo({ chamado }) {
   );
 }
 
-/** Detalhe do chamado numa janela (Figma), só leitura. `chamado` vem da lista; o resto, da API. */
-export default function DetalheChamado({ chamado, aoFechar }) {
+/**
+ * Detalhe do chamado numa janela (Figma), com as ações da Ouvidoria (FS6). `chamado` vem da lista;
+ * o resto, da API. Cada ação devolve o chamado inteiro: a janela mostra a resposta e avisa a lista
+ * (`aoMudar`) para recarregar.
+ */
+export default function DetalheChamado({ chamado, aoFechar, aoMudar }) {
   const [estado, setEstado] = useState({ id: null, dados: null, erro: null });
+  // Resultado da última ação deste chamado: { id, variante, texto }; texto null = já limpo
+  const [resposta, setMensagem] = useState(null);
+  const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
     if (!chamado) return undefined;
@@ -165,7 +148,42 @@ export default function DetalheChamado({ chamado, aoFechar }) {
     };
   }, [chamado]);
 
+  /**
+   * Roda uma ação do chamado e mostra a resposta dela. Devolve true se deu certo. Se outra pessoa
+   * finalizou antes (409 CHAMADO_JA_FINALIZADO), recarrega o detalhe e avisa.
+   */
+  async function executar(acao, sucesso) {
+    setOcupado(true);
+    setMensagem({ id: chamado.id, texto: null });
+    try {
+      const dados = await acao();
+      setEstado({ id: chamado.id, dados, erro: null });
+      setMensagem({ id: chamado.id, variante: 'sucesso', texto: sucesso });
+      aoMudar?.();
+      return true;
+    } catch (erro) {
+      if (erro.codigo === 'CHAMADO_JA_FINALIZADO') {
+        try {
+          setEstado({ id: chamado.id, dados: await buscarDetalhe(chamado.id), erro: null });
+          aoMudar?.();
+        } catch {
+          // o aviso abaixo já explica; o detalhe antigo fica na tela
+        }
+      }
+      setMensagem({
+        id: chamado.id,
+        variante: 'erro',
+        texto: erro.mensagem ?? 'Não foi possível concluir a ação.',
+      });
+      return false;
+    } finally {
+      setOcupado(false);
+    }
+  }
+
   const pronto = chamado && estado.id === chamado.id;
+  // Sem ação feita ainda, vale o aviso que veio do registro (ex.: uma foto não foi enviada)
+  const mensagem = resposta?.id === chamado?.id ? resposta : (chamado?.aviso ?? null);
   const tipo = chamado ? seloTipo(chamado.tipo) : null;
 
   return (
@@ -176,14 +194,22 @@ export default function DetalheChamado({ chamado, aoFechar }) {
       titulo={chamado ? `${formatarProtocolo(chamado.protocolo)} · ${tipo.rotulo}` : ''}
       descricao="Histórico e acompanhamento pela Ouvidoria"
       rodape={
-        <Botao variante="secundario" onClick={aoFechar}>
-          Fechar
-        </Botao>
+        <div className={estilos.rodapeDetalhe}>
+          {/* No rodapé, o resultado da ação fica à vista mesmo com a janela rolada */}
+          {pronto && mensagem?.texto && (
+            <Aviso variante={mensagem.variante}>{mensagem.texto}</Aviso>
+          )}
+          <Botao variante="secundario" onClick={aoFechar}>
+            Fechar
+          </Botao>
+        </div>
       }
     >
       {!pronto && <Carregando texto="Carregando o chamado..." />}
       {pronto && estado.erro && <Aviso variante="erro">{estado.erro.mensagem}</Aviso>}
-      {pronto && estado.dados && <Conteudo chamado={estado.dados} />}
+      {pronto && estado.dados && (
+        <Conteudo chamado={estado.dados} executar={executar} ocupado={ocupado} />
+      )}
     </Modal>
   );
 }
