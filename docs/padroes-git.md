@@ -166,8 +166,8 @@ Cada entrega relevante ao professor ou ao cliente é marcada com uma tag na `mai
 | Versão | Marco |
 | --- | --- |
 | `v0.0.1` | Documentação base: requisitos, padrões, modelo de dados, arquitetura, segurança e plano de testes |
-| `v0.1.0` | Primeira versão funcional da pesquisa do paciente |
-| `v0.2.0` | Dashboard da gestão e TV Wall |
+| `v0.1.0` | Primeira versão funcional da pesquisa do paciente (não chegou a ser marcada: foi entregue junto da `v0.2.0`) |
+| `v0.2.0` | Pesquisa, painel da gestão, Ouvidoria e TV Wall publicados |
 | `v1.0.0` | Entrega final e apresentação |
 
 ```
