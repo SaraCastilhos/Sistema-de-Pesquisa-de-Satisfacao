@@ -46,3 +46,11 @@ Depois de mudar o `.env`, reinicie o `npm run dev`.
 | `src/App.jsx`                                 | Todas as rotas                                                                  |
 
 Os testes ficam ao lado de cada arquivo (`*.test.js`/`*.test.jsx`).
+
+## Publicação
+
+Site estático na Vercel: Root Directory `frontend`, preset Vite (`npm run build`, pasta `dist`).
+
+O `vercel.json` manda toda rota que não é arquivo para o `index.html`, para `/pesquisa/:slug` e as demais abrirem por link direto e ao recarregar. Ele também define os cabeçalhos de segurança (`Content-Security-Policy`, `X-Content-Type-Options` e `Referrer-Policy`); o `connect-src` da política precisa ter o endereço da API. Ele só vale na Vercel: o `npm run preview` não o lê.
+
+Variáveis na Vercel: `VITE_API_URL` (endereço do Render, sem barra no final) e `VITE_API_SIMULADA=false`. Tudo que começa com `VITE_` é público.
