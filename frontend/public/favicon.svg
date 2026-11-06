@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>FHDOD</title>
+  <path
+    fill="#d11728"
+    d="M12 2h8a1.5 1.5 0 0 1 1.5 1.5V10.5H28.5A1.5 1.5 0 0 1 30 12v8a1.5 1.5 0 0 1-1.5 1.5H21.5V28.5A1.5 1.5 0 0 1 20 30h-8a1.5 1.5 0 0 1-1.5-1.5V21.5H3.5A1.5 1.5 0 0 1 2 20v-8a1.5 1.5 0 0 1 1.5-1.5H10.5V3.5A1.5 1.5 0 0 1 12 2Z"
+  />
+  <path
+    fill="none"
+    stroke="#fff"
+    stroke-width="1.6"
+    stroke-linecap="round"
+    d="M2 13.5c6 0 7 1 9 3s3 3 9 2.5 6-.5 10-.5"
+  />
+</svg>
