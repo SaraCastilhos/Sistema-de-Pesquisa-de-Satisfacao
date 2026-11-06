@@ -85,7 +85,7 @@ Regras:
 - Os valores de produção ficam só no painel do Render e em um gerenciador de senhas da dupla; nunca em mensagens, documentos ou capturas de tela.
 - A API valida as variáveis ao iniciar e não sobe se alguma faltar ou estiver fora do formato (seção 10 da arquitetura).
 - As variáveis `SEED_*` são lidas só pelo povoamento do banco (`prisma/seed.js`), que as valida do mesmo jeito. As senhas do povoamento têm pelo menos 10 caracteres, como qualquer senha do sistema (seção 3), e o povoamento recusa `SEED_DEMONSTRACAO=true` quando `NODE_ENV=production`.
-- O frontend tem uma única variável, `VITE_API_URL`, com o endereço da API. Ela **não é secreta**: tudo o que começa com `VITE_` fica visível no navegador, por isso nenhuma chave pode ir para o frontend.
+- O frontend tem duas variáveis: `VITE_API_URL`, com o endereço da API, e `VITE_API_SIMULADA`, que liga uma API de mentira para desenvolvimento e **deve ficar `false` (ou ausente) em produção**. Elas **não são secretas**: tudo o que começa com `VITE_` fica visível no navegador, por isso nenhuma chave pode ir para o frontend.
 - Os testes automáticos no GitHub Actions usam valores fictícios, escritos no próprio *workflow*, e um banco temporário. Nenhum segredo de produção é cadastrado no GitHub.
 
 ---
