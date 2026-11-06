@@ -297,7 +297,7 @@ Não executado nesta entrega (CT22).
 
 Endereço: <https://sistema-de-pesquisa-de-satisfacao-b.vercel.app>. API no Render, banco no Neon.
 
-**Roteiro de ponta a ponta (15 passos).** Executado por Sara, todos como esperado: entrada do Super Admin e troca de senha; criação de setores, etapas e perguntas; link direto e recarregamento da pesquisa; QR Code lido pelo celular; resposta completa no celular; resposta no tablet; Visão geral e TV Wall atualizando em até 5 s; TV Wall em tela cheia; relatórios em PDF e `.xlsx`; Gestor com um setor; formulários de papel com e sem data (filtro do canal Papel, CT93); escala e atendimentos; fotos na Ouvidoria; bloqueio de login na 6ª tentativa (CT37), inclusive o limite por cliente atrás do proxy do Render.
+**Roteiro de ponta a ponta (15 passos).** Executado por Sara e Maria, todos como esperado: entrada do Super Admin e troca de senha; criação de setores, etapas e perguntas; link direto e recarregamento da pesquisa; QR Code lido pelo celular; resposta completa no celular; resposta no tablet; Visão geral e TV Wall atualizando em até 5 s; TV Wall em tela cheia; relatórios em PDF e `.xlsx`; Gestor com um setor; formulários de papel com e sem data (filtro do canal Papel, CT93); escala e atendimentos; fotos na Ouvidoria; bloqueio de login na 6ª tentativa (CT37), inclusive o limite por cliente atrás do proxy do Render.
 
 **Lighthouse, modo mobile, em `/pesquisa/pronto-atendimento` (CT68 e CT69):**
 
