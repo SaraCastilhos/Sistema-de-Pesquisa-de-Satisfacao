@@ -4,6 +4,15 @@ Plataforma web de pesquisa de satisfação para a **Fundação Hospitalar Dr. Os
 
 Projeto Integrador 2026/2 — Curso Técnico em Informática.
 
+## Sistema publicado
+
+| O quê | Endereço |
+| --- | --- |
+| Sistema (pesquisa, painel e TV Wall) | <https://sistema-de-pesquisa-de-satisfacao-b.vercel.app> |
+| Documentação da API (Swagger) | <https://sistema-de-pesquisa-de-satisfacao.onrender.com/api/docs> |
+
+A API roda no plano gratuito do Render, que "dorme" após 15 minutos sem acesso: a primeira chamada depois disso pode levar até 1 minuto.
+
 ## O problema
 
 Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os formulários chegam sem data, setor ou turno, os elogios se perdem, e a Ouvidoria gasta horas transcrevendo papel para planilhas.
@@ -24,7 +33,7 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | Frontend | React (Vite) | Vercel |
 | Backend | Node.js, Express, Prisma | Render |
 | Banco de dados | PostgreSQL | Neon |
-| Testes | Jest, Supertest | — |
+| Testes | Jest e Supertest (backend), Vitest (frontend) | — |
 | Documentação da API | Swagger (OpenAPI) | — |
 
 ## Documentação
@@ -41,6 +50,7 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | Documento | Conteúdo |
 | --- | --- |
 | [Arquitetura do Backend](docs/arquitetura-backend.md) | Camadas, padrões de projeto, contrato da API e decisões técnicas |
+| [Rastreabilidade do Backend](docs/rastreabilidade-backend.md) | Ligação de cada requisito com o código e os testes |
 | [Plano e Relatório de Testes](docs/plano-e-relatorio-de-testes.md) | Estratégia, casos de teste por requisito e resultados da execução |
 
 **Banco de dados**
