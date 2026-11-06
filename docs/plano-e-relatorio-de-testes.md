@@ -1,6 +1,6 @@
 # Plano e Relatório de Testes — Pesquisa de Satisfação FHDOD
 
-**Versão:** 1.0 (plano) — 16/10/2026
+**Versão:** 1.0 (plano) — 16/10/2026 · Relatório atualizado em 06/11/2026 (`v0.2.0`)
 **Base:** [Documento de Requisitos](Documento_de_Requisitos_FHDOD.md) v1.13 e [Arquitetura do Backend](arquitetura-backend.md)
 
 Este documento tem duas partes. A **Parte 1** é o plano: a estratégia, os ambientes e os casos de teste que comprovam cada requisito. A **Parte 2** é o relatório de execução, preenchido conforme os testes são executados, com os resultados, a cobertura e os defeitos encontrados.
@@ -229,13 +229,14 @@ Cada defeito encontrado vira uma issue no GitHub com o rótulo `bug`, contendo o
 
 # Parte 2 — Relatório de execução
 
-> Esta parte é preenchida a cada entrega, com os resultados reais. Enquanto não houver código, as tabelas ficam vazias.
+> Esta parte é preenchida a cada entrega, com os resultados reais.
 
 ## 9. Execuções
 
 | Data | Versão (tag) | Commit | Executado por | Resultado geral |
 | --- | --- | --- | --- | --- |
 | 31/10/2026 | — (fechamento do backend, antes da `v0.1.0`) | `5cf9f7c` (`develop`) com as mudanças da branch `test/fechamento-backend` | Sara | Testes automáticos: 808 de 808 passaram; cobertura acima de 60% em todos os services; ESLint e Prettier sem erros. Testes manuais ainda não executados (dependem do frontend) |
+| 06/11/2026 | `v0.2.0` | `cb3737d` (`develop`) | Sara | Backend: 809 de 809 testes e frontend: 289 de 289 (medidos em 05/11 com `--maxWorkers=2`), ESLint e build sem erros. Sistema publicado (Vercel, Render e Neon): roteiro de ponta a ponta de 15 passos, executado em 06/11, com todos os resultados como esperado. Lighthouse mobile na pesquisa e conferência das telas feitos. Veja a seção 14 |
 
 ## 10. Resultados por nível
 
@@ -244,8 +245,9 @@ Cada defeito encontrado vira uma issue no GitHub com o rótulo `bug`, contendo o
 | Unitário | 8 | 8 | 8 | 0 | 367 testes em 31 arquivos de `tests/unit/`, todos aprovados. Os casos CT ficam nos services e nas funções puras (turnos, horas úteis, criptografia) |
 | Banco de dados | 5 | 5 | 5 | 0 | CT61 e a parte de banco do CT46, CT86, CT87 e CT92, em `tests/integration/banco.restricoes.test.js` e `perguntas.routes.test.js` |
 | Integração | 66 | 66 | 66 | 0 | 441 testes em 21 arquivos de `tests/integration/` (os de banco incluídos), todos aprovados |
-| Manual (interface, acessibilidade, desempenho) | 14 | 0 | — | — | Dependem das telas; executados na entrega da `v0.1.0` |
-| Aceitação (RNF05) | 1 | 0 | — | — | CT22, antes da entrega final |
+| Frontend (Vitest) | — | — | 289 | 0 | 289 testes dos componentes e das telas, aprovados em 05/11. Não têm identificador CT |
+| Manual (interface, acessibilidade, desempenho) | 14 | 3 | 3 | 0 | CT60 (resposta no dashboard e no TV Wall em até 5 s), CT69 (Lighthouse) e CT70 (telas conferidas à mão). O CT68 foi feito em parte (ver seção 15). O roteiro de ponta a ponta no sistema publicado também passou |
+| Aceitação (RNF05) | 1 | 0 | — | — | CT22 não foi executado nesta entrega |
 
 Um caso de dois níveis (ex.: CT92, B/I) conta nas duas linhas. Os 5 casos removidos (CT10, CT34, CT45, CT47 e CT80) ficam fora da contagem. Além dos 75 casos do plano, a suíte tem testes sem identificador CT, que cobrem validações, erros e casos de borda de cada rota. A ligação de cada requisito do backend com o código e os testes está em [`rastreabilidade-backend.md`](rastreabilidade-backend.md).
 
@@ -277,14 +279,35 @@ Média da camada de serviços: 99,55% das linhas (883 de 887), 95,04% das ramifi
 
 | Issue | Caso de teste | Severidade | Descrição | Situação |
 | --- | --- | --- | --- | --- |
-| | | | | |
+| #128 | Conferência manual de 05/11/2026 | Baixa | O título da janela do chamado continuava "A classificar" depois de classificar; e cadastrar um setor repetido, sem informar o endereço, mostrava o aviso do endereço em vez do aviso do nome | Corrigido (PR #129), com testes |
 
 ## 13. Teste de aceitação (RNF05)
 
-| Participante | Aparelho | Tempo para concluir | Pulou alguma pergunta? | Observações |
-| --- | --- | --- | --- | --- |
-| | | | | |
+Não executado nesta entrega (CT22).
 
 ## 14. Conclusão
 
-A preencher a cada entrega: o que foi testado, o que ficou de fora e por quê, riscos conhecidos e se a versão está apta para entrega.
+**Versão `v0.2.0` (06/11/2026), apta para a apresentação.**
+
+- **Testado:** todos os testes automáticos do backend (809) e do frontend (289); o roteiro de ponta a ponta de 15 passos no sistema publicado; o Lighthouse da pesquisa no celular; as telas nos tamanhos de celular e tablet.
+- **Não executado nesta entrega:** o teste com 5 pessoas (CT22, RNF05); o axe DevTools; a medição separada de tamanho de botões, fonte e contraste (CT68); os demais casos manuais isolados do plano.
+- **Riscos conhecidos:** (a) o Render gratuito "dorme" após 15 minutos sem acesso, e a primeira chamada pode levar até 1 minuto; (b) a página da pesquisa tem uma mudança de layout durante o carregamento (CLS 0,154) e fica perto do limite de 3 s; (c) os termos de privacidade estão na versão 1, provisória, até a Ouvidoria enviar o texto aprovado; (d) o dashboard não traz o bloco por tipo de atendimento e por respondente, e "Manifestações por tipo" aparece só para o Super Admin.
+
+## 15. Execução no sistema publicado (06/11/2026)
+
+Endereço: <https://sistema-de-pesquisa-de-satisfacao-b.vercel.app>. API no Render, banco no Neon.
+
+**Roteiro de ponta a ponta (15 passos).** Executado por Sara, todos como esperado: entrada do Super Admin e troca de senha; criação de setores, etapas e perguntas; link direto e recarregamento da pesquisa; QR Code lido pelo celular; resposta completa no celular; resposta no tablet; Visão geral e TV Wall atualizando em até 5 s; TV Wall em tela cheia; relatórios em PDF e `.xlsx`; Gestor com um setor; formulários de papel com e sem data (filtro do canal Papel, CT93); escala e atendimentos; fotos na Ouvidoria; bloqueio de login na 6ª tentativa (CT37), inclusive o limite por cliente atrás do proxy do Render.
+
+**Lighthouse, modo mobile, em `/pesquisa/pronto-atendimento` (CT68 e CT69):**
+
+| Medida | Resultado |
+| --- | --- |
+| Acessibilidade | 100, sem falhas |
+| Desempenho | 87 |
+| Primeiro e maior conteúdo (FCP e LCP) | 2,6 s |
+| Pronta para uso (TTI) | 2,8 s (meta: menos de 3 s, RNF07) |
+| Tempo de bloqueio (TBT) | 50 ms |
+| Mudança de layout (CLS) | 0,154 (recomendado: até 0,1) |
+
+O Lighthouse usa a rede móvel simulada e a API já acordada. Ele mede a acessibilidade com as regras do axe-core, mas não substitui o axe DevTools nem a medição de tamanho de botões e fonte do CT68.
