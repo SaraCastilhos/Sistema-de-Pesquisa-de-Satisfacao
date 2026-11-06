@@ -109,6 +109,20 @@ describe('ações do chamado (FS6)', () => {
     expect(api.detalhe).toHaveBeenCalledTimes(1); // a resposta substituiu uma nova busca
   });
 
+  it('ao classificar, o título da janela muda na hora (sem fechar e abrir de novo)', async () => {
+    api.classificar.mockResolvedValue({ ...completo, tipo: 'RECLAMACAO' });
+    const janela = await abrirDetalhe(completo);
+    expect(within(janela).getByText('OUV-0248 · A classificar')).toBeInTheDocument();
+
+    await userEvent.selectOptions(
+      await within(janela).findByLabelText('Tipo da manifestação'),
+      'RECLAMACAO',
+    );
+
+    expect(await within(janela).findByText('OUV-0248 · Reclamação')).toBeInTheDocument();
+    expect(within(janela).queryByText('OUV-0248 · A classificar')).not.toBeInTheDocument();
+  });
+
   it('bloqueia a finalização enquanto o chamado está "a classificar"', async () => {
     const janela = await abrirDetalhe(completo);
 

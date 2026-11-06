@@ -184,7 +184,8 @@ export default function DetalheChamado({ chamado, aoFechar, aoMudar }) {
   const pronto = chamado && estado.id === chamado.id;
   // Sem ação feita ainda, vale o aviso que veio do registro (ex.: uma foto não foi enviada)
   const mensagem = resposta?.id === chamado?.id ? resposta : (chamado?.aviso ?? null);
-  const tipo = chamado ? seloTipo(chamado.tipo) : null;
+  // O tipo do detalhe (atualizado ao classificar) vale mais que o da lista, que só serve enquanto carrega
+  const tipo = chamado ? seloTipo(pronto && estado.dados ? estado.dados.tipo : chamado.tipo) : null;
 
   return (
     <Modal
