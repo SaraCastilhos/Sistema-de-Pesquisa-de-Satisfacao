@@ -1,0 +1,107 @@
+.grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--espaco-4);
+}
+
+.cartao {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--espaco-6);
+  background: var(--cor-cartao);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-cartao);
+  box-shadow: var(--sombra-cartao);
+}
+
+.topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--espaco-4);
+}
+
+.icone {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--raio-cartao);
+  background: var(--cor-marca-suave);
+  color: var(--cor-marca);
+}
+
+.icone svg {
+  width: 22px;
+  height: 22px;
+}
+
+.etapas {
+  margin-top: var(--espaco-2);
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.numeros {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espaco-3);
+  margin: var(--espaco-4) 0;
+  padding: var(--espaco-4) 0;
+  border-block: 1px solid var(--cor-borda);
+}
+
+.numeros dt {
+  margin-bottom: var(--espaco-1);
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.numeros dd {
+  margin: 0;
+  /* "9,4 / 10" em uma linha (adaptação do guia) */
+  white-space: nowrap;
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.numeros strong {
+  font-family: var(--fonte-titulo);
+  font-size: var(--tamanho-titulo-secao);
+  font-weight: 800;
+  color: var(--cor-texto);
+}
+
+.numeros strong.alta {
+  color: var(--cor-sucesso);
+}
+
+.numeros strong.queda {
+  color: var(--cor-perigo);
+}
+
+.acoes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espaco-4);
+  margin-top: auto;
+}
+
+.indicadores {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  font-size: var(--tamanho-texto);
+  text-decoration: none;
+}
+
+.indicadores:hover {
+  text-decoration: underline;
+}
+
+.indicadores svg {
+  width: 16px;
+  height: 16px;
+}

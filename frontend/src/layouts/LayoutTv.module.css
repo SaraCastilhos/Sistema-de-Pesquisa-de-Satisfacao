@@ -1,0 +1,189 @@
+/*
+ * 1em = 1% da largura de uma tela 16:9 (19,2 px em 1920 × 1080; 13,66 px numa TV HD). Por isso a
+ * tela inteira mantém a proporção em qualquer TV. Os painéis herdam esse tamanho.
+ */
+.pagina {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0.8em 3.2% 1em;
+  overflow: hidden;
+  font-size: max(10px, min(1vw, 1.778vh));
+  color: var(--cor-texto);
+  background: var(--cor-cartao);
+}
+
+.barra {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.telaCheia {
+  width: 2.4em;
+  height: 2.4em;
+  display: grid;
+  place-items: center;
+  color: var(--cor-texto);
+  background: var(--cor-cartao);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-controle);
+  box-shadow: var(--sombra-cartao);
+  cursor: pointer;
+}
+
+.telaCheia svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+.topo {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1em;
+  padding-bottom: 0.8em;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.logo {
+  height: 4.6em;
+  width: auto;
+}
+
+.identidade {
+  text-align: center;
+}
+
+.identidade h1 {
+  margin: 0.2em 0 0;
+  font-family: var(--fonte-titulo);
+  font-size: 2.1em;
+  font-weight: 800;
+  color: var(--cor-texto);
+}
+
+.legenda {
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cor-texto-secundario);
+}
+
+.mes {
+  margin: 0;
+  text-align: right;
+  font-size: 1.05em;
+  color: var(--cor-texto-secundario);
+}
+
+.quadro {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 1em;
+  padding: 1.6em 2.4em;
+  background: var(--cor-cartao);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-pesquisa);
+  box-shadow: var(--sombra-cartao);
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1em;
+}
+
+.situacao {
+  display: flex;
+  align-items: center;
+  gap: 1.2em;
+  font-size: 1.05em;
+  color: var(--cor-texto-secundario);
+}
+
+.situacao > span {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.situacao svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.semConexao {
+  font-weight: 700;
+  color: var(--cor-perigo);
+}
+
+.pontos {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.6em;
+}
+
+/* O ponto é pequeno, mas a área de clique inclui o espaço transparente em volta dele */
+.pontos button {
+  box-sizing: content-box;
+  width: 0.7em;
+  height: 0.7em;
+  padding: 0.4em 0.3em;
+  border: 0;
+  border-radius: 99px;
+  background: var(--cor-borda) content-box;
+  cursor: pointer;
+}
+
+.pontos .pontoAtivo {
+  width: 2.2em;
+  background-color: var(--cor-marca);
+}
+
+.rodape {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-top: 1em;
+  padding-top: 0.8em;
+  font-size: 0.85em;
+  border-top: 1px solid var(--cor-borda);
+}
+
+.rodape svg {
+  width: 1.3em;
+  height: 1.3em;
+  color: var(--cor-sucesso);
+}
+
+/* A TV não usa esta faixa: só evita rolagem horizontal em quem abrir no celular (CT70) */
+@media (max-width: 899px) {
+  .pagina {
+    height: auto;
+    min-height: 100vh;
+    font-size: 12px;
+    overflow: visible;
+  }
+
+  .topo {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .mes {
+    text-align: center;
+  }
+
+  .meta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .quadro {
+    padding: 1.2em;
+  }
+}

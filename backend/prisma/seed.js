@@ -1,16 +1,27 @@
 // Povoamento do banco (seção 5 de docs/padroes-banco-de-dados.md).
 // Pode rodar quantas vezes for preciso: nunca duplica nem altera o que já existe.
-//   - Sempre: etapas e turnos padrão (só se ainda não houver nenhum), Super Admin inicial e
-//     versão 1 dos termos.
+//   - Sempre: turnos padrão (só se ainda não houver nenhum), Super Admin inicial e versão 1 dos
+//     termos. Etapas não: cada uma pertence a um setor (D15), e o banco nasce sem setores.
 //   - Só com SEED_DEMONSTRACAO=true: dados fictícios para desenvolvimento e apresentação.
+
+// Nunca roda no ambiente de teste: o banco de teste é apagado e recriado pelos próprios testes.
+// A recusa vem antes de qualquer importação porque o @prisma/client carrega sozinho o .env ao
+// ser importado, e com NODE_ENV=test o povoamento gravaria no banco de desenvolvimento.
+if (process.env.NODE_ENV === 'test') {
+  console.error(
+    'O povoamento não roda no ambiente de teste (NODE_ENV=test): o banco de teste é recriado ' +
+      'pelos próprios testes. Veja a seção "Testes" do backend/README.md.',
+  );
+  process.exit(1);
+}
+
 const path = require('node:path');
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const { PrismaClient } = require('@prisma/client');
 
-const arquivoEnv = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
-dotenv.config({ path: path.join(__dirname, '..', arquivoEnv), quiet: true });
+dotenv.config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 const CUSTO_BCRYPT = 12;
 const FUSO = 'America/Sao_Paulo';
@@ -54,10 +65,19 @@ function lerVariaveis() {
   if (!resultado.success) {
     const problemas = resultado.error.issues.map((p) => `  - ${p.path.join('.')}: ${p.message}`);
     throw new Error(
-      `Variáveis do povoamento inválidas. Confira o arquivo ${arquivoEnv}:\n${problemas.join('\n')}`,
+      `Variáveis do povoamento inválidas. Confira o arquivo .env:\n${problemas.join('\n')}`,
     );
   }
   return resultado.data;
+}
+
+// Só o nome do banco, tirado do DATABASE_URL: nunca o usuário, a senha ou o endereço
+function nomeDoBanco(endereco) {
+  try {
+    return new URL(endereco).pathname.replace(/^\//, '') || '(sem nome)';
+  } catch {
+    return '(DATABASE_URL ausente ou inválida)';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -107,11 +127,10 @@ function somarDias(data, dias) {
 // Dados de referência e configuração inicial (sempre)
 // ---------------------------------------------------------------------------
 
-const ETAPAS = ['Recepção', 'Triagem', 'Enfermagem', 'Médico'];
-
+// Os dois períodos do formulário de papel oficial (D19). Os testes usam outra grade, de 3 turnos,
+// de propósito (tests/helpers/banco.js).
 const TURNOS_PADRAO = [
-  { nome: 'Manhã', inicio: '07:00', fim: '13:00' },
-  { nome: 'Tarde', inicio: '13:00', fim: '19:00' },
+  { nome: 'Dia', inicio: '07:00', fim: '19:00' },
   { nome: 'Noite', inicio: '19:00', fim: '07:00' },
 ];
 
@@ -129,17 +148,8 @@ const TERMOS_V1 = `Termos de privacidade da Pesquisa de Satisfação da FHDOD (v
 
 5. Seus direitos. Você pode pedir acesso, correção ou eliminação do seu telefone a qualquer momento pela Ouvidoria do hospital. Contato do encarregado de dados da FHDOD: [a definir pela Ouvidoria].`;
 
-// As etapas padrão só são criadas num banco sem etapas. Depois disso, elas são do Super Admin
-// (RF20, D15): recriar "Triagem" depois de ele renomeá-la quebraria a restrição única de ordem.
-async function criarEtapas(prisma) {
-  if ((await prisma.etapa.count()) > 0) return;
-  await prisma.etapa.createMany({
-    data: ETAPAS.map((nome, indice) => ({ nome, ordem: indice + 1 })),
-  });
-}
-
 // Os turnos padrão só são criados num banco sem turnos. Depois disso, a grade é do Super Admin
-// (RF20): recriar "Manhã" depois de ele trocar a grade criaria turnos sobrepostos.
+// (RF20): recriar "Dia" depois de ele trocar a grade criaria turnos sobrepostos.
 async function criarTurnos(prisma) {
   if ((await prisma.turno.count()) > 0) return;
   await prisma.turno.createMany({
@@ -205,48 +215,72 @@ function criarSorteio(semente) {
   return { aleatorio, inteiro, item, chance, uuid };
 }
 
-const SETORES_DEMONSTRACAO = [
-  { nome: 'Pronto Atendimento', slug: 'pronto-atendimento', peso: 5, atendimentos: 2400 },
-  { nome: 'Internação', slug: 'internacao', peso: 3, atendimentos: 650 },
-  { nome: 'Raio-X', slug: 'raio-x', peso: 2, atendimentos: 900 },
-];
-
-// Perguntas por etapa; a primeira de cada etapa é sempre ROSTINHO (RF04)
-const PERGUNTAS_DEMONSTRACAO = {
-  Recepção: [
-    { tipo: 'ROSTINHO', texto: 'Como você avalia o atendimento na recepção?' },
-    { tipo: 'SIM_NAO', texto: 'Você foi recebido com cordialidade?' },
-    { tipo: 'ESCALA', texto: 'De 0 a 10, quão claras foram as informações que você recebeu?' },
-  ],
-  Triagem: [
-    { tipo: 'ROSTINHO', texto: 'Como você avalia a triagem?' },
-    {
-      tipo: 'MULTIPLA_ESCOLHA',
-      texto: 'Quanto tempo você esperou para ser chamado?',
-      opcoes: [
-        'Menos de 15 minutos',
-        'De 15 a 30 minutos',
-        'De 30 minutos a 1 hora',
-        'Mais de 1 hora',
-      ],
-    },
-  ],
-  Enfermagem: [
-    { tipo: 'ROSTINHO', texto: 'Como você avalia o cuidado da equipe de enfermagem?' },
-    { tipo: 'SIM_NAO', texto: 'A equipe explicou os procedimentos antes de fazê-los?' },
-    { tipo: 'ESCALA', texto: 'De 0 a 10, quanto você se sentiu respeitado?' },
-  ],
-  Médico: [
-    { tipo: 'ROSTINHO', texto: 'Como você avalia o atendimento médico?' },
-    { tipo: 'SIM_NAO', texto: 'O médico explicou o seu caso de forma clara?' },
-    {
-      tipo: 'MULTIPLA_ESCOLHA',
-      texto: 'O que mais pesou na sua avaliação?',
-      opcoes: ['Atenção recebida', 'Tempo de espera', 'Explicações', 'Resolução do problema'],
-    },
-    { tipo: 'ESCALA', texto: 'De 0 a 10, quanto você confia no tratamento indicado?' },
-  ],
+// Itens de avaliação do formulário de papel oficial ("Pesquisa de Satisfação e NPS", versão 02),
+// escritos como pergunta. Todas são rostinhos (RF04, RF22).
+const PERGUNTAS_PAPEL = {
+  recepcao: 'Como você avalia o atendimento da recepção?',
+  espera: 'Como você avalia o tempo de espera?',
+  informacoes: 'Como você avalia a clareza das informações recebidas?',
+  enfermagem: 'Como você avalia o atendimento da enfermagem?',
+  medico: 'Como você avalia o atendimento médico?',
+  raioX: 'Como você avalia o atendimento no Raio-X?',
+  estrutura: 'Como você avalia a estrutura e o conforto das instalações?',
+  limpeza: 'Como você avalia a limpeza e a higienização do ambiente?',
+  nutricao: 'Como você avalia o serviço de nutrição?',
+  multiprofissional:
+    'Como você avalia o atendimento da equipe multiprofissional (assistente social, fisioterapeuta, psicólogo)?',
 };
+
+// Serviços do formulário de papel. etapas: as do setor, na ordem, cada uma com as suas perguntas
+// (D15); tvWall: setor e etapas marcados para o TV Wall (RF31), para a demonstração ter painéis
+// de setor e de etapa
+const SETORES_DEMONSTRACAO = [
+  {
+    nome: 'Pronto Atendimento',
+    slug: 'pronto-atendimento',
+    peso: 5,
+    atendimentos: 2400,
+    etapas: [
+      {
+        nome: 'Recepção',
+        perguntas: [PERGUNTAS_PAPEL.recepcao, PERGUNTAS_PAPEL.espera, PERGUNTAS_PAPEL.informacoes],
+      },
+      { nome: 'Enfermagem', perguntas: [PERGUNTAS_PAPEL.enfermagem] },
+      { nome: 'Médico', perguntas: [PERGUNTAS_PAPEL.medico] },
+      { nome: 'Estrutura', perguntas: [PERGUNTAS_PAPEL.estrutura, PERGUNTAS_PAPEL.limpeza] },
+    ],
+    tvWall: true,
+    etapasTvWall: ['Recepção', 'Médico'],
+  },
+  {
+    nome: 'Internação Clínica',
+    slug: 'internacao-clinica',
+    peso: 3,
+    atendimentos: 650,
+    etapas: [
+      { nome: 'Recepção', perguntas: [PERGUNTAS_PAPEL.recepcao, PERGUNTAS_PAPEL.informacoes] },
+      { nome: 'Enfermagem', perguntas: [PERGUNTAS_PAPEL.enfermagem] },
+      { nome: 'Médico', perguntas: [PERGUNTAS_PAPEL.medico] },
+      { nome: 'Nutrição', perguntas: [PERGUNTAS_PAPEL.nutricao] },
+      { nome: 'Equipe multiprofissional', perguntas: [PERGUNTAS_PAPEL.multiprofissional] },
+      { nome: 'Estrutura', perguntas: [PERGUNTAS_PAPEL.estrutura, PERGUNTAS_PAPEL.limpeza] },
+    ],
+    tvWall: true,
+    etapasTvWall: ['Enfermagem'],
+  },
+  {
+    nome: 'Raio X',
+    slug: 'raio-x',
+    peso: 2,
+    atendimentos: 900,
+    etapas: [
+      { nome: 'Recepção', perguntas: [PERGUNTAS_PAPEL.recepcao, PERGUNTAS_PAPEL.espera] },
+      { nome: 'Exame', perguntas: [PERGUNTAS_PAPEL.raioX] },
+    ],
+    tvWall: false,
+    etapasTvWall: [],
+  },
+];
 
 const TEXTOS_MANIFESTACAO = {
   ELOGIO: [
@@ -269,27 +303,6 @@ const TEXTOS_MANIFESTACAO = {
   ],
 };
 
-const MELHORIAS_DEMONSTRACAO = [
-  {
-    titulo: 'Novo painel de chamada na recepção',
-    descricao: 'Os pacientes agora acompanham a ordem de atendimento pela TV.',
-    diasAtras: 40,
-    publicada: true,
-  },
-  {
-    titulo: 'Bebedouro na sala de espera',
-    descricao: 'Instalado a pedido dos pacientes do Pronto Atendimento.',
-    diasAtras: 20,
-    publicada: true,
-  },
-  {
-    titulo: 'Mais cadeiras na sala de espera',
-    descricao: null,
-    diasAtras: 5,
-    publicada: false,
-  },
-];
-
 // Minutos desde 0h em que cada turno começa e quanto dura (a Noite atravessa a meia-noite)
 function janelaDoTurno(turno) {
   const inicio = turno.horaInicio.getUTCHours() * 60 + turno.horaInicio.getUTCMinutes();
@@ -311,7 +324,7 @@ async function criarEstrutura(tx, variaveis) {
     const setor = await tx.setor.upsert({
       where: { slug: s.slug },
       update: {},
-      create: { nome: s.nome, slug: s.slug },
+      create: { nome: s.nome, slug: s.slug, exibirTvWall: s.tvWall },
     });
     setores.push({ ...s, ...setor });
 
@@ -342,43 +355,34 @@ async function criarEstrutura(tx, variaveis) {
   return setores;
 }
 
-// Perguntas só são criadas num setor que ainda não tem nenhuma
-async function criarPerguntas(tx, setor, etapas) {
-  if ((await tx.pergunta.count({ where: { setorId: setor.id } })) === 0) {
-    await tx.pergunta.create({
-      data: {
-        setorId: setor.id,
-        tipo: 'DATA_PERIODO',
-        texto: 'Quando foi o seu atendimento?',
-        ordem: 1,
-      },
-    });
-    for (const etapa of etapas) {
-      // No Raio-X, só as 2 primeiras perguntas de cada etapa: cada setor tem a própria pesquisa
-      const modelos = PERGUNTAS_DEMONSTRACAO[etapa.nome].slice(
-        0,
-        setor.slug === 'raio-x' ? 2 : undefined,
-      );
-      for (const [indice, modelo] of modelos.entries()) {
-        await tx.pergunta.create({
-          data: {
-            setorId: setor.id,
-            etapaId: etapa.id,
-            tipo: modelo.tipo,
-            texto: modelo.texto,
-            ordem: indice + 1,
-            opcoes: modelo.opcoes
-              ? { create: modelo.opcoes.map((texto, i) => ({ texto, ordem: i + 1 })) }
-              : undefined,
-          },
-        });
-      }
+// Etapas e perguntas só são criadas num setor que ainda não tem etapas. Depois disso, elas são
+// do Super Admin (RF20, D15): recriar "Estrutura" depois de ele renomeá-la quebraria a restrição
+// única de ordem no setor.
+async function criarEtapasEPerguntas(tx, setor) {
+  if ((await tx.etapa.count({ where: { setorId: setor.id } })) === 0) {
+    for (const [indice, { nome, perguntas }] of setor.etapas.entries()) {
+      const etapa = await tx.etapa.create({
+        data: {
+          setorId: setor.id,
+          nome,
+          ordem: indice + 1,
+          exibirTvWall: setor.etapasTvWall.includes(nome),
+        },
+      });
+      await tx.pergunta.createMany({
+        data: perguntas.map((texto, i) => ({
+          etapaId: etapa.id,
+          texto,
+          ordem: i + 1,
+        })),
+      });
     }
   }
+  // Na ordem da pesquisa: etapa por etapa, e dentro dela, pergunta por pergunta
   return tx.pergunta.findMany({
-    where: { setorId: setor.id, ativa: true },
-    include: { opcoes: { where: { ativa: true }, orderBy: { ordem: 'asc' } } },
-    orderBy: { ordem: 'asc' },
+    where: { ativa: true, etapa: { setorId: setor.id, ativo: true } },
+    include: { etapa: true },
+    orderBy: [{ etapa: { ordem: 'asc' } }, { ordem: 'asc' }],
   });
 }
 
@@ -401,7 +405,7 @@ async function criarEscalaEAtendimentos(tx, setores, turnos, superAdmin, inicio,
   }
   await tx.escala.createMany({ data: escala, skipDuplicates: true });
 
-  // Atendimentos dos 3 meses; o Raio-X fica de propósito sem o mês atual,
+  // Atendimentos dos 3 meses; o Raio X fica de propósito sem o mês atual,
   // para o dashboard mostrar "atendimentos não informados" (RF27)
   const [ano, mes] = inicio.split('-').map(Number);
   const variacao = [0.95, 1.05, 1];
@@ -420,64 +424,140 @@ async function criarEscalaEAtendimentos(tx, setores, turnos, superAdmin, inicio,
   await tx.atendimentoMensal.createMany({ data: atendimentos, skipDuplicates: true });
 }
 
-function valorDaResposta(sorteio, pergunta, satisfacao) {
-  const ruido = () => sorteio.aleatorio() * 0.3 - 0.15;
-  const nivel = Math.min(1, Math.max(0, satisfacao + ruido()));
-  switch (pergunta.tipo) {
-    case 'ROSTINHO':
-      return { valorNumero: 1 + Math.round(nivel * 4) };
-    case 'ESCALA':
-      return { valorNumero: Math.round(nivel * 10) };
-    case 'SIM_NAO':
-      return { valorBooleano: sorteio.chance(0.15 + nivel * 0.8) };
-    case 'MULTIPLA_ESCOLHA':
-      return { opcaoId: sorteio.item(pergunta.opcoes).id };
-    default:
-      throw new Error(`Tipo sem valor de demonstração: ${pergunta.tipo}`);
-  }
+// Rostinho de 1 a 5 coerente com a satisfação da sessão (RF04)
+function rostinho(sorteio, satisfacao) {
+  const ruido = sorteio.aleatorio() * 0.3 - 0.15;
+  const nivel = Math.min(1, Math.max(0, satisfacao + ruido));
+  return 1 + Math.round(nivel * 4);
 }
 
-// Cria cerca de 300 sessões entre o início do período e agora, com respostas coerentes
-function montarSessoes(sorteio, setores, perguntasPorSetor, etapas, turnos, inicio, agora) {
+// Tela "Sobre o atendimento" (RF32): 70% respondem, os demais pulam. Mais pacientes que
+// familiares, e mais SUS que plano de saúde e particular
+function sobreOAtendimento(sorteio) {
+  if (!sorteio.chance(0.7)) return { respondente: null, tipoAtendimento: null };
+  return {
+    respondente: sorteio.chance(0.75) ? 'PACIENTE' : 'FAMILIAR',
+    tipoAtendimento: sorteio.item([
+      'SUS',
+      'SUS',
+      'SUS',
+      'PLANO_DE_SAUDE',
+      'PLANO_DE_SAUDE',
+      'PARTICULAR',
+    ]),
+  };
+}
+
+// Formulário de papel digitado pela Ouvidoria (RF33, D19). A Ouvidoria recolhe o formulário de 0 a
+// 2 dias depois do atendimento e o digita de 0 a 2 dias depois, em horário comercial. Todas as
+// perguntas do setor são digitadas: o item marcado leva o rostinho e o item em branco fica pulado.
+// A nota de 0 a 10 é opcional no papel (sem ela, a sessão fica incompleta, RN01). Sem data
+// escrita, vale a data de recolhimento (ESTIMADO); sem turno escrito, a sessão fica sem turno.
+// Os três casos se revezam pela posição do formulário (indice), e não por sorteio, para todos
+// aparecerem na demonstração qualquer que seja o dia em que o povoamento roda.
+function montarPapel(
+  sorteio,
+  { id, indice, setor, perguntas, turno, dataAtendimento, satisfacao },
+) {
+  const recolhimento = somarDias(dataAtendimento, sorteio.inteiro(0, 2));
+  const iniciadaEm = momentoLocal(
+    somarDias(recolhimento, sorteio.inteiro(0, 2)),
+    sorteio.inteiro(9, 16),
+    sorteio.inteiro(0, 59),
+  );
+  const semData = indice % 5 === 1;
+  const semTurno = indice % 5 === 2;
+  const comNota = indice % 5 !== 3;
+
+  let relogio = iniciadaEm.getTime();
+  const respostas = perguntas.map((pergunta) => {
+    relogio += sorteio.inteiro(3, 8) * 1000;
+    const base = { sessaoId: id, perguntaId: pergunta.id, respondidaEm: new Date(relogio) };
+    return sorteio.chance(0.25)
+      ? { ...base, pulada: true }
+      : { ...base, valorNumero: rostinho(sorteio, satisfacao) };
+  });
+  relogio += sorteio.inteiro(3, 8) * 1000;
+
+  const sessao = {
+    id,
+    setorId: setor.id,
+    canal: 'PAPEL',
+    dataAtendimento: paraDataBanco(semData ? recolhimento : dataAtendimento),
+    turnoId: semTurno ? null : turno.id,
+    turnoOrigem: semData ? 'ESTIMADO' : 'INFORMADO',
+    ...sobreOAtendimento(sorteio),
+    notaGeral: comNota ? notaDaSatisfacao(sorteio, satisfacao) : null,
+    iniciadaEm,
+    concluidaEm: comNota ? new Date(relogio) : null,
+  };
+  return { sessao, respostas };
+}
+
+// Nota de 0 a 10 coerente com a satisfação da sessão (RF03)
+function notaDaSatisfacao(sorteio, satisfacao) {
+  return Math.min(10, Math.max(0, Math.round(satisfacao * 10 + sorteio.aleatorio() * 2 - 1)));
+}
+
+// Cria cerca de 300 sessões entre o início do período e agora, com respostas coerentes:
+// cerca de 10% de formulários de papel digitados e as demais pelo celular ou pelo tablet
+function montarSessoes(sorteio, setores, perguntasPorSetor, turnos, inicio, agora) {
   const hoje = partesLocais(agora).data;
   const totalDias = Math.round((paraDataBanco(hoje) - paraDataBanco(inicio)) / 86400000) + 1;
   const sorteioSetor = setores.flatMap((s) => Array(s.peso).fill(s));
+  // A Noite atravessa a meia-noite; o Dia, não
   const noite = turnos.find((t) => t.horaInicio > t.horaFim);
+  const dia = turnos.find((t) => t.horaInicio < t.horaFim);
   // Sessões só até 1 hora atrás, para nenhuma resposta ficar com horário no futuro
   const limite = agora.getTime() - 3600000;
   const sessoes = [];
-  const sessoesEtapas = [];
   const respostas = [];
 
   while (sessoes.length < 300) {
     const setor = sorteio.item(sorteioSetor);
-    const turno = sorteio.item([turnos[0], turnos[0], turnos[1], turnos[1], turnos[2]]);
+    // 4 em cada 5 atendimentos são durante o dia
+    const turno = sorteio.item([dia, dia, dia, dia, noite]);
     const dataAtendimento = somarDias(inicio, sorteio.inteiro(0, totalDias - 1));
+    // Satisfação de 0 a 1, que orienta todas as respostas da sessão: média próxima de 0,8,
+    // com 5% de pacientes muito insatisfeitos, para a distribuição das notas ter todas as faixas
+    const satisfacao = sorteio.chance(0.05)
+      ? sorteio.aleatorio() * 0.3
+      : Math.min(1, Math.max(0, 0.8 + (sorteio.aleatorio() - 0.5) * 0.8));
+    const id = sorteio.uuid();
+    const perguntas = perguntasPorSetor.get(setor.id);
+
+    if (sorteio.chance(0.12)) {
+      const papel = montarPapel(sorteio, {
+        id,
+        indice: sessoes.filter((sessao) => sessao.canal === 'PAPEL').length,
+        setor,
+        perguntas,
+        turno,
+        dataAtendimento,
+        satisfacao,
+      });
+      if (papel.sessao.iniciadaEm.getTime() > limite) continue;
+      sessoes.push(papel.sessao);
+      respostas.push(...papel.respostas);
+      continue;
+    }
+
     const canal = sorteio.chance(0.6) ? 'CELULAR' : 'TABLET';
 
-    // 1 em cada 5 respostas pelo celular é dada em casa, na noite seguinte, e o paciente
-    // informa a data e o turno do atendimento (RF12, RN03); as demais, durante o atendimento
+    // 1 em cada 5 respostas pelo celular é dada em casa, na noite seguinte (RF12); as demais,
+    // durante o atendimento
     const emCasa = canal === 'CELULAR' && sorteio.chance(0.2);
     const iniciadaEm = emCasa
       ? momentoLocal(somarDias(dataAtendimento, 1), sorteio.inteiro(19, 22), sorteio.inteiro(0, 59))
       : momentoNoTurno(sorteio, dataAtendimento, turno);
     if (iniciadaEm.getTime() > limite) continue;
 
-    const id = sorteio.uuid();
-    const perguntas = perguntasPorSetor.get(setor.id);
-    // A recepção é sempre vivida; as demais etapas, em 70% das sessões
-    const vividas = etapas.filter((_, i) => i === 0 || sorteio.chance(0.7));
-    // Satisfação de 0 a 1, que orienta todas as respostas da sessão: média próxima de 0,8,
-    // com 5% de pacientes muito insatisfeitos, para a distribuição das notas ter todas as faixas
-    const satisfacao = sorteio.chance(0.05)
-      ? sorteio.aleatorio() * 0.3
-      : Math.min(1, Math.max(0, 0.8 + (sorteio.aleatorio() - 0.5) * 0.8));
+    // A pesquisa percorre todas as etapas do setor (RF06): o paciente pula as perguntas das
+    // etapas que não viveu. A primeira etapa é sempre vivida; as demais, em 70% das sessões
+    const etapasVividas = new Set(
+      setor.etapas.map((etapa) => etapa.nome).filter((_, i) => i === 0 || sorteio.chance(0.7)),
+    );
 
-    // Perguntas na ordem da pesquisa: a de data e período primeiro, depois as das etapas vividas
-    const roteiro = [
-      ...perguntas.filter((p) => p.etapaId === null),
-      ...vividas.flatMap((e) => perguntas.filter((p) => p.etapaId === e.id)),
-    ];
     // 3% abandonam logo no início; 15% param no meio; o resto vai até a nota geral
     const destino = sorteio.chance(0.03)
       ? 'vazia'
@@ -488,32 +568,35 @@ function montarSessoes(sorteio, setores, perguntasPorSetor, etapas, turnos, inic
       destino === 'vazia'
         ? 0
         : destino === 'incompleta'
-          ? sorteio.inteiro(1, roteiro.length - 1)
-          : roteiro.length;
+          ? sorteio.inteiro(1, perguntas.length - 1)
+          : perguntas.length;
 
     let relogio = iniciadaEm.getTime();
     // No hospital, a data e o turno calculados pela hora de abertura são os do próprio atendimento (D2, D13)
     let sessaoDataTurno = { dataAtendimento, turnoId: turno.id, turnoOrigem: 'CALCULADO' };
+    // No celular, a primeira tela pergunta a data e o período (RN03): quem responde em casa
+    // sempre informa; no hospital, 15% informam. Quem abandona logo no início não chega a ela
+    if (canal === 'CELULAR' && destino !== 'vazia' && (emCasa || sorteio.chance(0.15))) {
+      sessaoDataTurno = { dataAtendimento, turnoId: turno.id, turnoOrigem: 'INFORMADO' };
+    }
+    // Depois da data, a tela "Sobre o atendimento", no celular e no tablet (RF32). Quem abandona
+    // logo no início não chega a ela
+    const sobre =
+      destino === 'vazia'
+        ? { respondente: null, tipoAtendimento: null }
+        : sobreOAtendimento(sorteio);
 
-    for (const pergunta of roteiro.slice(0, quantas)) {
+    for (const pergunta of perguntas.slice(0, quantas)) {
       relogio += sorteio.inteiro(4, 20) * 1000;
       const base = { sessaoId: id, perguntaId: pergunta.id, respondidaEm: new Date(relogio) };
-      if (pergunta.tipo === 'DATA_PERIODO') {
-        // Quem responde em casa sempre informa; no hospital, 15% informam
-        if (emCasa || sorteio.chance(0.15)) {
-          respostas.push({ ...base, valorData: paraDataBanco(dataAtendimento), turnoId: turno.id });
-          sessaoDataTurno = { dataAtendimento, turnoId: turno.id, turnoOrigem: 'INFORMADO' };
-        } else {
-          respostas.push({ ...base, pulada: true });
-        }
-      } else if (sorteio.chance(0.1)) {
+      if (!etapasVividas.has(pergunta.etapa.nome) || sorteio.chance(0.1)) {
         respostas.push({ ...base, pulada: true });
       } else {
-        respostas.push({ ...base, ...valorDaResposta(sorteio, pergunta, satisfacao) });
+        respostas.push({ ...base, valorNumero: rostinho(sorteio, satisfacao) });
       }
     }
 
-    // Quem respondeu em casa e pulou a data fica com a data e o turno da hora de abertura
+    // Quem respondeu em casa e não informou a data fica com a data e o turno da hora de abertura
     if (emCasa && sessaoDataTurno.turnoOrigem === 'CALCULADO') {
       const local = partesLocais(iniciadaEm);
       sessaoDataTurno = {
@@ -527,10 +610,7 @@ function montarSessoes(sorteio, setores, perguntasPorSetor, etapas, turnos, inic
     let concluidaEm = null;
     if (destino === 'completa') {
       relogio += sorteio.inteiro(5, 15) * 1000;
-      notaGeral = Math.min(
-        10,
-        Math.max(0, Math.round(satisfacao * 10 + sorteio.aleatorio() * 2 - 1)),
-      );
+      notaGeral = notaDaSatisfacao(sorteio, satisfacao);
       concluidaEm = new Date(relogio);
     }
 
@@ -541,23 +621,22 @@ function montarSessoes(sorteio, setores, perguntasPorSetor, etapas, turnos, inic
       dataAtendimento: paraDataBanco(sessaoDataTurno.dataAtendimento),
       turnoId: sessaoDataTurno.turnoId,
       turnoOrigem: sessaoDataTurno.turnoOrigem,
+      ...sobre,
       notaGeral,
       iniciadaEm,
       concluidaEm,
     });
-    if (destino !== 'vazia') {
-      for (const etapa of vividas) sessoesEtapas.push({ sessaoId: id, etapaId: etapa.id });
-    }
   }
-  return { sessoes, sessoesEtapas, respostas };
+  return { sessoes, respostas };
 }
 
 // Cerca de 30 manifestações anônimas: 25 da pesquisa e 5 de outros canais (RF17)
-function montarManifestacoes(sorteio, sessoes, etapas, setores, turnos, superAdmin, agora) {
+function montarManifestacoes(sorteio, sessoes, etapasPorSetor, setores, turnos, superAdmin, agora) {
   const manifestacoes = [];
-  const comNota = sessoes.filter((s) => s.notaGeral !== null);
+  // O formulário de papel não tem espaço para manifestação: só o QR Code do canal on-line da
+  // Ouvidoria. Por isso só as sessões digitais concluídas originam manifestações da pesquisa
+  const comNota = sessoes.filter((s) => s.notaGeral !== null && s.canal !== 'PAPEL');
   const escolhidas = new Set();
-  let aprovadas = 0;
 
   while (manifestacoes.length < 25) {
     const sessao = sorteio.item(comNota);
@@ -570,59 +649,244 @@ function montarManifestacoes(sorteio, sessoes, etapas, setores, turnos, superAdm
     const texto = sorteio.item(TEXTOS_MANIFESTACAO[conteudo]);
     const criadoEm = sessao.concluidaEm;
     const encerrada = sorteio.chance(0.4);
-    // Os 4 primeiros elogios vão para o TV Wall; os textos de demonstração não citam nomes (RN08)
-    const aprovar = conteudo === 'ELOGIO' && aprovadas < 4;
-    if (aprovar) aprovadas++;
     // O paciente não classifica (RN12): parte das novas fica "a classificar" para a Ouvidoria.
-    // Finalizadas e aprovadas precisam de tipo (ck_manifestacao_tipo_finalizacao, ck_manifestacao_tv_wall)
-    const classificada = encerrada || aprovar || sorteio.chance(0.5);
+    // Finalizadas precisam de tipo (ck_manifestacao_tipo_finalizacao)
+    const classificada = encerrada || sorteio.chance(0.5);
     const tipo = classificada ? conteudo : null;
     const finalizadaEm = encerrada
       ? new Date(Math.min(criadoEm.getTime() + 2 * 86400000, agora.getTime()))
       : null;
 
+    // Na pesquisa, o paciente não indica etapa nem profissional (RF09): só escreve o texto
     manifestacoes.push({
       origem: 'PESQUISA',
       sessaoId: sessao.id,
       tipo,
       setorId: sessao.setorId,
-      etapaId: sorteio.chance(0.6) ? sorteio.item(etapas).id : null,
       dataOcorrencia: sessao.dataAtendimento,
       turnoId: sessao.turnoId,
       texto,
-      // Nome claramente fictício; nunca aparece em indicadores (D12)
-      profissionalCitado:
-        conteudo === 'ELOGIO' && sorteio.chance(0.3) ? 'Profissional Exemplo' : null,
       status: encerrada ? 'ENCERRADA' : 'NOVA',
       desfecho: encerrada ? 'Encaminhada à coordenação do setor.' : null,
       finalizadaEm,
-      textoTvWall: aprovar ? texto : null,
-      aprovadaTvWallEm: aprovar
-        ? new Date(Math.min(criadoEm.getTime() + 86400000, agora.getTime()))
-        : null,
-      aprovadaTvWallPorId: aprovar ? superAdmin.id : null,
       criadoEm,
       atualizadoEm: finalizadaEm ?? criadoEm,
     });
   }
 
-  // Nos outros canais, quem registra já é a Ouvidoria, então o tipo vem preenchido (RN12)
+  // Nos outros canais, quem registra já é a Ouvidoria, então o tipo vem preenchido (RN12);
+  // ela pode anotar a etapa (do mesmo setor) e o profissional citado (RF17)
   for (const origem of ['TELEFONE', 'PRESENCIAL', 'EMAIL', 'PAPEL', 'PAPEL']) {
     const tipo = sorteio.item(['ELOGIO', 'RECLAMACAO', 'SUGESTAO']);
     const criadoEm = new Date(agora.getTime() - sorteio.inteiro(1, 60) * 86400000);
+    const setor = sorteio.item(setores);
     manifestacoes.push({
       origem,
       registradaPorId: superAdmin.id,
       tipo,
-      setorId: sorteio.item(setores).id,
+      setorId: setor.id,
+      etapaId: sorteio.chance(0.6) ? sorteio.item(etapasPorSetor.get(setor.id)).id : null,
       dataOcorrencia: paraDataBanco(partesLocais(new Date(criadoEm.getTime() - 86400000)).data),
       turnoId: sorteio.chance(0.5) ? sorteio.item(turnos).id : null,
       texto: sorteio.item(TEXTOS_MANIFESTACAO[tipo]),
+      // Nome claramente fictício; nunca aparece em indicadores (D12)
+      profissionalCitado: tipo === 'ELOGIO' && sorteio.chance(0.5) ? 'Profissional Exemplo' : null,
       criadoEm,
       atualizadoEm: criadoEm,
     });
   }
   return manifestacoes;
+}
+
+// Manifestações da pesquisa COM telefone para retorno (RF10), para a lista e o alerta da
+// Ouvidoria (S1). Os números são fictícios (5551900000001, 5551900000002...). diasAtras: há
+// quantos dias o paciente enviou; NOVA há 5 dias ou mais já passou das 48 horas úteis do
+// primeiro contato (RF16), mesmo com um fim de semana no meio. notaBaixa: o conteúdo combina com
+// a nota (RF08), quando há uma sessão assim. duplicataDe: o mesmo telefone de outra, no mesmo
+// setor e em menos de 24 horas (RF19). O tipo vazio fica "a classificar" (RN12).
+const MANIFESTACOES_COM_TELEFONE = [
+  {
+    telefone: '5551900000001',
+    diasAtras: 6,
+    notaBaixa: true,
+    tipo: null,
+    texto: 'Fiquei sem saber o resultado do exame. Gostaria que alguém me ligasse.',
+  },
+  {
+    telefone: '5551900000002',
+    diasAtras: 5,
+    notaBaixa: true,
+    tipo: 'RECLAMACAO',
+    texto: 'Esperei mais de três horas e ninguém informava a previsão.',
+  },
+  // Só o pedido de retorno, sem texto (ck_manifestacao_texto_ou_retorno)
+  { telefone: '5551900000003', diasAtras: 8, notaBaixa: true, tipo: null, texto: null },
+  {
+    telefone: '5551900000004',
+    diasAtras: 3,
+    notaBaixa: false,
+    tipo: 'ELOGIO',
+    texto: 'Quero agradecer pessoalmente à equipe que atendeu o meu pai.',
+  },
+  {
+    telefone: '5551900000005',
+    diasAtras: 1,
+    notaBaixa: false,
+    tipo: 'ELOGIO',
+    texto: 'Atendimento excelente da enfermagem. Podem me ligar se precisarem.',
+  },
+  {
+    telefone: '5551900000006',
+    diasAtras: 2,
+    notaBaixa: true,
+    tipo: null,
+    texto: 'A sala de espera estava muito cheia e faltavam cadeiras.',
+  },
+  {
+    telefone: '5551900000006',
+    duplicataDe: 5,
+    tipo: null,
+    texto: 'Mandei uma mensagem antes, mas queria acrescentar que o banheiro estava fechado.',
+  },
+  {
+    telefone: '5551900000007',
+    diasAtras: 4,
+    notaBaixa: false,
+    tipo: 'SUGESTAO',
+    texto: 'Sugiro um painel com a ordem de chamada. Posso explicar melhor por telefone.',
+  },
+];
+
+// Cada uma nasce de uma sessão digital concluída que ainda não tem manifestação, no momento da
+// conclusão. Roda também num banco que já tem a demonstração, mas só uma vez: se já houver
+// alguma manifestação com pedido de retorno (mesmo finalizada, D7), não cria nada.
+async function criarManifestacoesComTelefone(prisma) {
+  // Só aqui: a cifra e o hash usam as chaves TELEFONE_* do .env, validadas por config/env.js
+  const { cifrar, hmac } = require('../src/utils/cripto');
+  const { normalizar } = require('../src/utils/telefone');
+
+  await prisma.$transaction(async (tx) => {
+    if ((await tx.manifestacao.count({ where: { pediuRetorno: true } })) > 0) {
+      console.log('Demonstração: manifestações com telefone já existem; nada foi duplicado.');
+      return;
+    }
+    const termo = await tx.termoPrivacidade.findUnique({ where: { versao: 1 } });
+    const candidatas = await tx.sessao.findMany({
+      where: {
+        canal: { in: ['CELULAR', 'TABLET'] },
+        notaGeral: { not: null },
+        manifestacoes: { none: {} },
+      },
+      select: {
+        id: true,
+        setorId: true,
+        dataAtendimento: true,
+        turnoId: true,
+        notaGeral: true,
+        concluidaEm: true,
+      },
+      orderBy: { concluidaEm: 'asc' },
+    });
+    if (candidatas.length < MANIFESTACOES_COM_TELEFONE.length) {
+      console.log('Demonstração: manifestações com telefone puladas, por falta de sessões.');
+      return;
+    }
+
+    const usadas = new Set();
+    const distancia = (sessao, alvo) => Math.abs(sessao.concluidaEm.getTime() - alvo);
+    // A sessão livre mais próxima do momento desejado. As preferências são tentadas em ordem:
+    // vale a primeira que alguma sessão atende; se nenhuma atender, qualquer sessão livre serve
+    function escolher(alvo, ...preferencias) {
+      const livres = candidatas.filter((sessao) => !usadas.has(sessao.id));
+      const preferida = preferencias.find((regra) => livres.some(regra));
+      const lista = preferida ? livres.filter(preferida) : livres;
+      return lista.reduce((melhor, sessao) =>
+        distancia(sessao, alvo) < distancia(melhor, alvo) ? sessao : melhor,
+      );
+    }
+
+    const agora = Date.now();
+    const escolhidas = [];
+    const sessaoDoItem = new Map();
+    for (const [indice, item] of MANIFESTACOES_COM_TELEFONE.entries()) {
+      let sessao;
+      if (item.duplicataDe !== undefined) {
+        // Outra sessão do mesmo setor, concluída até 24 horas depois da original
+        const original = sessaoDoItem.get(item.duplicataDe);
+        const inicio = original.concluidaEm.getTime();
+        const seguintes = candidatas.filter(
+          (s) =>
+            !usadas.has(s.id) &&
+            s.setorId === original.setorId &&
+            s.concluidaEm.getTime() > inicio &&
+            s.concluidaEm.getTime() - inicio < 24 * 3600000,
+        );
+        // De preferência com a nota no mesmo lado da original (RF08)
+        const faixa = (nota) => (nota <= 6 ? 'baixa' : 'alta');
+        const mesmaFaixa = (s) => faixa(s.notaGeral) === faixa(original.notaGeral);
+        sessao = seguintes.find(mesmaFaixa) ?? seguintes[0];
+        if (!sessao) {
+          console.log('Demonstração: sem sessão para a duplicata; ela foi pulada.');
+          continue;
+        }
+      } else {
+        const baixa = (s) => (item.notaBaixa ? s.notaGeral <= 6 : s.notaGeral >= 7);
+        // Para a original da duplicata, só serve uma sessão com outra do mesmo setor logo depois
+        const temSeguinte = (s) =>
+          candidatas.some(
+            (outra) =>
+              outra.id !== s.id &&
+              outra.setorId === s.setorId &&
+              outra.concluidaEm > s.concluidaEm &&
+              outra.concluidaEm.getTime() - s.concluidaEm.getTime() < 24 * 3600000,
+          );
+        const ehOriginal = MANIFESTACOES_COM_TELEFONE.some((outro) => outro.duplicataDe === indice);
+        const alvo = agora - item.diasAtras * 86400000;
+        sessao = ehOriginal
+          ? escolher(alvo, (s) => temSeguinte(s) && baixa(s), temSeguinte)
+          : escolher(alvo, baixa);
+      }
+      usadas.add(sessao.id);
+      sessaoDoItem.set(indice, sessao);
+      escolhidas.push({ item, sessao });
+    }
+
+    const dados = escolhidas.map(({ item, sessao }) => {
+      const numero = normalizar(item.telefone);
+      const telefoneHash = hmac(numero);
+      // A marca é calculada como na API (RF19), a partir das já escolhidas
+      const possivelDuplicata = escolhidas.some(
+        (outra) =>
+          outra.sessao !== sessao &&
+          hmac(normalizar(outra.item.telefone)) === telefoneHash &&
+          outra.sessao.setorId === sessao.setorId &&
+          outra.sessao.concluidaEm < sessao.concluidaEm &&
+          sessao.concluidaEm.getTime() - outra.sessao.concluidaEm.getTime() < 24 * 3600000,
+      );
+      return {
+        origem: 'PESQUISA',
+        sessaoId: sessao.id,
+        tipo: item.tipo,
+        setorId: sessao.setorId,
+        dataOcorrencia: sessao.dataAtendimento,
+        turnoId: sessao.turnoId,
+        texto: item.texto,
+        pediuRetorno: true,
+        telefoneCifrado: cifrar(numero),
+        telefoneHash,
+        termoPrivacidadeId: termo.id,
+        consentimentoEm: sessao.concluidaEm,
+        status: 'NOVA',
+        possivelDuplicata,
+        criadoEm: sessao.concluidaEm,
+        atualizadoEm: sessao.concluidaEm,
+      };
+    });
+    await tx.manifestacao.createMany({ data: dados });
+    console.log(
+      `Demonstração: ${dados.length} manifestações com telefone fictício criadas (${dados.filter((d) => d.possivelDuplicata).length} possível duplicata).`,
+    );
+  });
 }
 
 async function criarDemonstracao(prisma, superAdmin, variaveis) {
@@ -634,59 +898,53 @@ async function criarDemonstracao(prisma, superAdmin, variaveis) {
 
   await prisma.$transaction(
     async (tx) => {
-      const etapas = await tx.etapa.findMany({ orderBy: { ordem: 'asc' } });
+      // As sessões são sorteadas entre o Dia e a Noite padrão: com outra grade, não há demonstração
       const turnos = await tx.turno.findMany({ where: { ativo: true }, orderBy: { id: 'asc' } });
-      if (turnos.length !== 3) {
+      const nomesPadrao = TURNOS_PADRAO.map((t) => t.nome).join('|');
+      if (turnos.map((t) => t.nome).join('|') !== nomesPadrao) {
         console.log('Demonstração: pulada, porque a grade de turnos não é mais a padrão.');
-        return;
-      }
-      // As perguntas de demonstração são escolhidas pelo nome da etapa (D15: o Super Admin
-      // pode renomear, criar ou desativar etapas)
-      if (etapas.map((etapa) => etapa.nome).join('|') !== ETAPAS.join('|')) {
-        console.log('Demonstração: pulada, porque as etapas não são mais as padrão.');
         return;
       }
 
       const setores = await criarEstrutura(tx, variaveis);
       const perguntasPorSetor = new Map();
-      for (const setor of setores)
-        perguntasPorSetor.set(setor.id, await criarPerguntas(tx, setor, etapas));
-      await criarEscalaEAtendimentos(tx, setores, turnos, superAdmin, inicio, hoje);
-
-      if ((await tx.melhoria.count()) === 0) {
-        await tx.melhoria.createMany({
-          data: MELHORIAS_DEMONSTRACAO.map((m) => ({
-            titulo: m.titulo,
-            descricao: m.descricao,
-            realizadaEm: paraDataBanco(somarDias(hoje, -m.diasAtras)),
-            publicada: m.publicada,
-            criadaPorId: superAdmin.id,
-          })),
-        });
+      const etapasPorSetor = new Map();
+      for (const setor of setores) {
+        perguntasPorSetor.set(setor.id, await criarEtapasEPerguntas(tx, setor));
+        etapasPorSetor.set(setor.id, await tx.etapa.findMany({ where: { setorId: setor.id } }));
       }
+      await criarEscalaEAtendimentos(tx, setores, turnos, superAdmin, inicio, hoje);
 
       // Sessões não têm chave natural: só são criadas num banco que ainda não tem nenhuma
       if ((await tx.sessao.count()) > 0) {
         console.log('Demonstração: sessões já existem; nada foi duplicado.');
         return;
       }
+      // As etapas e perguntas de demonstração são escolhidas pelo nome (D15: o Super Admin pode
+      // renomear, criar ou desativar etapas); as sessões só são montadas sobre as originais
+      const alterado = setores.find((setor) => {
+        const nomes = [...new Set(perguntasPorSetor.get(setor.id).map((p) => p.etapa.nome))];
+        return nomes.join('|') !== setor.etapas.map((etapa) => etapa.nome).join('|');
+      });
+      if (alterado) {
+        console.log(`Demonstração: sessões puladas, porque as etapas de ${alterado.nome} mudaram.`);
+        return;
+      }
       const sorteio = criarSorteio(20261016);
-      const { sessoes, sessoesEtapas, respostas } = montarSessoes(
+      const { sessoes, respostas } = montarSessoes(
         sorteio,
         setores,
         perguntasPorSetor,
-        etapas,
         turnos,
         inicio,
         agora,
       );
       await tx.sessao.createMany({ data: sessoes });
-      await tx.sessaoEtapa.createMany({ data: sessoesEtapas });
       await tx.resposta.createMany({ data: respostas });
       const manifestacoes = montarManifestacoes(
         sorteio,
         sessoes,
-        etapas,
+        etapasPorSetor,
         setores,
         turnos,
         superAdmin,
@@ -694,22 +952,23 @@ async function criarDemonstracao(prisma, superAdmin, variaveis) {
       );
       await tx.manifestacao.createMany({ data: manifestacoes });
       console.log(
-        `Demonstração: ${sessoes.length} sessões, ${respostas.length} respostas e ${manifestacoes.length} manifestações criadas.`,
+        `Demonstração: ${sessoes.length} sessões (${sessoes.filter((s) => s.canal === 'PAPEL').length} de papel), ${respostas.length} respostas e ${manifestacoes.length} manifestações criadas.`,
       );
     },
     { timeout: 60000 },
   );
+  await criarManifestacoesComTelefone(prisma);
 }
 
 async function main() {
   const variaveis = lerVariaveis();
+  console.log(`Banco de dados: ${nomeDoBanco(process.env.DATABASE_URL)}.`);
   const prisma = new PrismaClient();
   try {
-    await criarEtapas(prisma);
     await criarTurnos(prisma);
     const superAdmin = await criarSuperAdmin(prisma, variaveis);
     await criarTermos(prisma, superAdmin);
-    console.log('Dados de referência: etapas, turnos, Super Admin e termos v1 conferidos.');
+    console.log('Dados de referência: turnos, Super Admin e termos v1 conferidos.');
 
     if (variaveis.SEED_DEMONSTRACAO === 'true') {
       await criarDemonstracao(prisma, superAdmin, variaveis);

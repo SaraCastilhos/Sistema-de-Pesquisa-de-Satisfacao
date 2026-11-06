@@ -1,5 +1,98 @@
 # Contrato das rotas do módulo termos, juntado aos demais por src/docs/swagger.js
 tags:
-  - name: Termos de privacidade
-    description: Versões dos termos de privacidade
-paths: {}
+  - name: Termos
+    description: Versões dos termos de privacidade (RF24, D8)
+paths:
+  /api/termos:
+    get:
+      tags: [Termos]
+      summary: Histórico das versões dos termos (só Super Admin)
+      description: >
+        Todas as versões publicadas, da mais nova para a mais antiga. A primeira da lista é a
+        vigente. O texto vigente para o paciente sai de GET /api/publico/termos.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Versões dos termos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TermoVersao'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+    post:
+      tags: [Termos]
+      summary: Publica uma nova versão dos termos (só Super Admin)
+      description: >
+        Cria a versão seguinte (maior versão + 1), que passa a ser a vigente. As versões anteriores
+        nunca são alteradas nem apagadas, porque cada manifestação guarda a versão que o paciente
+        aceitou (RN06). O HTML é removido do texto, e um texto vazio é recusado. O texto final deve
+        ser aprovado pelo encarregado de dados da FHDOD (seção 8.4 de seguranca-e-nuvem.md). A
+        publicação é registrada no log.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TermoEntrada'
+            example:
+              texto: Termos de privacidade da Pesquisa de Satisfação da FHDOD (versão 2) ...
+      responses:
+        '201':
+          description: Nova versão publicada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TermoVersao'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '409':
+          description: >
+            Outra versão foi publicada ao mesmo tempo (VERSAO_CONCORRENTE). Confira o histórico e
+            publique de novo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    TermoVersao:
+      type: object
+      required: [id, versao, texto, criadoEm, criadoPor]
+      properties:
+        id: { type: integer, examples: [2] }
+        versao: { type: integer, examples: [2] }
+        texto: { type: string }
+        criadoEm:
+          type: string
+          format: date-time
+          description: Início da vigência
+        criadoPor:
+          type: object
+          required: [id, nome]
+          properties:
+            id: { type: integer, examples: [1] }
+            nome: { type: string, examples: [Ouvidoria] }
+    TermoEntrada:
+      type: object
+      additionalProperties: false
+      required: [texto]
+      properties:
+        texto:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: HTML é removido; espaços nas pontas também

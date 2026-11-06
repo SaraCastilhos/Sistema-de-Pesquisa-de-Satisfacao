@@ -1,0 +1,51 @@
+.aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+  padding: var(--espaco-3) var(--espaco-4);
+  border: 1px solid;
+  border-radius: var(--raio-cartao);
+  font-size: inherit;
+}
+
+.icone {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.texto {
+  flex: 1;
+  min-width: 0;
+  color: var(--cor-texto);
+}
+
+.texto strong {
+  display: block;
+  font-weight: 600;
+}
+
+.info {
+  background: var(--cor-info-suave);
+  border-color: var(--cor-info-suave);
+  color: var(--cor-info);
+}
+
+.sucesso {
+  background: var(--cor-sucesso-suave);
+  border-color: var(--cor-sucesso-suave);
+  color: var(--cor-sucesso);
+}
+
+.atencao {
+  background: var(--cor-atencao-suave);
+  border-color: var(--cor-atencao-suave);
+  color: var(--cor-atencao);
+}
+
+.erro {
+  background: var(--cor-perigo-suave);
+  border-color: var(--cor-perigo-suave);
+  color: var(--cor-perigo);
+}

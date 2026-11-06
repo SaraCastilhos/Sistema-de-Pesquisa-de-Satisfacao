@@ -85,7 +85,7 @@ Regras:
 - Os valores de produção ficam só no painel do Render e em um gerenciador de senhas da dupla; nunca em mensagens, documentos ou capturas de tela.
 - A API valida as variáveis ao iniciar e não sobe se alguma faltar ou estiver fora do formato (seção 10 da arquitetura).
 - As variáveis `SEED_*` são lidas só pelo povoamento do banco (`prisma/seed.js`), que as valida do mesmo jeito. As senhas do povoamento têm pelo menos 10 caracteres, como qualquer senha do sistema (seção 3), e o povoamento recusa `SEED_DEMONSTRACAO=true` quando `NODE_ENV=production`.
-- O frontend tem uma única variável, `VITE_API_URL`, com o endereço da API. Ela **não é secreta**: tudo o que começa com `VITE_` fica visível no navegador, por isso nenhuma chave pode ir para o frontend.
+- O frontend tem duas variáveis: `VITE_API_URL`, com o endereço da API, e `VITE_API_SIMULADA`, que liga uma API de mentira para desenvolvimento e **deve ficar `false` (ou ausente) em produção**. Elas **não são secretas**: tudo o que começa com `VITE_` fica visível no navegador, por isso nenhuma chave pode ir para o frontend.
 - Os testes automáticos no GitHub Actions usam valores fictícios, escritos no próprio *workflow*, e um banco temporário. Nenhum segredo de produção é cadastrado no GitHub.
 
 ---
@@ -127,7 +127,7 @@ A autorização é verificada em três níveis, todos no backend:
 | Recurso | Paciente (sem login) | Gestor | Super Admin |
 | --- | --- | --- | --- |
 | Responder a pesquisa e deixar manifestação | Sim | — | — |
-| TV Wall | Sim (só dados gerais, RN08) | — | — |
+| TV Wall | Sim (só porcentagens, RN08) | — | — |
 | Dashboard, exportação e relatório | — | Seus setores | Todos |
 | Perguntas | — | Seus setores | Todas |
 | Setores, turnos, equipes, usuários, escala, atendimentos, termos | — | — | Sim |
@@ -152,7 +152,7 @@ As rotas da pesquisa e do TV Wall não usam token (RNF08). Elas são protegidas 
 | Uma resposta por pergunta | Restrição única no banco (RF13) |
 | Validade da sessão | Respostas aceitas só até 12 horas depois da abertura |
 | Tamanho das requisições | Corpo JSON de no máximo 100 KB; textos de manifestação com até 2.000 caracteres |
-| Dados do TV Wall | A rota devolve apenas números agregados, elogios aprovados com o texto editado e melhorias publicadas (RN08) |
+| Dados do TV Wall | A rota devolve só porcentagens, nunca contagens; setores e etapas só quando marcados pelo Super Admin e com pelo menos 10 avaliações no mês, para uma porcentagem não identificar quem respondeu (RN08, RF31) |
 
 ---
 
@@ -213,13 +213,13 @@ Como os telefones são apagados ao final de cada chamado (RN07), normalmente há
 | Hash do telefone | `manifestacao.telefone_hash` | Aviso de possível duplicata (RF19) | Mesmo consentimento | Ninguém o lê; só é comparado | Até a finalização do chamado |
 | Texto da manifestação | `manifestacao.texto` | Tratamento pela Ouvidoria | Consentimento, ao enviar | Só o Super Admin | Mantido como registro da Ouvidoria (RN07) |
 | Profissional citado | `manifestacao.profissional_citado` | Apuração pela Ouvidoria | Legítimo interesse do hospital (inciso IX) | Só o Super Admin | Mantido com a manifestação; nunca em indicadores (RN04) |
-| Foto de formulário em papel | `anexo_manifestacao` | Comprovação do registro manual (RN11) | A mesma da manifestação | Só o Super Admin | Ver seção 9 do modelo (ponto 6) |
+| Foto de manifestação escrita | `anexo_manifestacao` | Comprovação do registro de uma manifestação recebida por escrito (RF17) | A mesma da manifestação | Só o Super Admin | Ver seção 9 do modelo (ponto 6) |
 | Nome e e-mail de usuários | `usuario` | Acesso ao sistema | Execução de contrato e legítimo interesse | Super Admin | Enquanto o usuário existir |
 | Ações dos usuários | `log_auditoria` | Responsabilização (RNF11) | Legítimo interesse | Super Admin | Mantido como registro |
 
-As respostas da pesquisa **não são dados pessoais**: a sessão não guarda nome, IP nem identificador de aparelho (D11 do modelo).
+As respostas da pesquisa **não são dados pessoais**: a sessão não guarda nome, IP nem identificador de aparelho (D11 do modelo). Quem respondeu (paciente ou familiar) e o tipo de atendimento (SUS, plano de saúde ou particular), opcionais desde a v1.13 dos requisitos, são categorias amplas e também não identificam a pessoa (RF32, D18 do modelo). O formulário de papel digitado pela Ouvidoria (RF33) segue a mesma regra: ele não tem campo de nome nem de telefone.
 
-Um ponto de atenção: o texto livre de uma manifestação pode conter dados de saúde que o paciente escreve espontaneamente (ex.: um diagnóstico). Esses são **dados sensíveis** (art. 11). Por isso o texto é visível só para o Super Admin e nunca vai ao TV Wall sem passar pela edição do D9.
+Um ponto de atenção: o texto livre de uma manifestação pode conter dados de saúde que o paciente escreve espontaneamente (ex.: um diagnóstico). Esses são **dados sensíveis** (art. 11). Por isso o texto é visível só para o Super Admin e nunca vai ao TV Wall, que não mostra manifestações (RN08).
 
 ### 8.2 Princípios aplicados
 
@@ -296,5 +296,5 @@ Antes de cada publicação em produção:
 | RNF11 — Log de alterações | 8.1, 8.5 |
 | RNF12 — LGPD | 8 |
 | RN06, RN07 — Consentimento e anonimização | 8.1 a 8.3 |
-| RN08 — TV Wall só com dados gerais | 4, 5 |
+| RN08 — TV Wall só com porcentagens | 4, 5 |
 | Restrição de planos gratuitos (seção 2.3 dos requisitos) | 1.1 |

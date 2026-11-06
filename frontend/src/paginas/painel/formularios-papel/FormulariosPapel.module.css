@@ -1,0 +1,189 @@
+/* Otimizado para 1366 × 768 (RNF03) */
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.pagina > header {
+  margin-bottom: var(--espaco-2);
+}
+
+/* Formulário, na ordem do papel */
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-5);
+}
+
+.cabecalhoPapel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
+  gap: var(--espaco-4);
+}
+
+.dataPapel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+}
+
+.perguntas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.etapa {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-3);
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.etapa h3 {
+  font-size: var(--tamanho-medio);
+}
+
+.pergunta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.pergunta legend {
+  padding: 0;
+  margin-bottom: var(--espaco-2);
+  font-size: var(--tamanho-texto);
+  font-weight: 500;
+}
+
+.nota {
+  padding-top: var(--espaco-4);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.dica {
+  margin-right: auto;
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.acoesFormulario {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--espaco-3);
+}
+
+/* Opções (rostinhos e nota): botões de opção de verdade, escondidos atrás do desenho */
+.escolha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}
+
+.opcao {
+  position: relative;
+  cursor: pointer;
+}
+
+.opcao span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-2);
+  min-height: var(--altura-controle);
+  padding: 0 var(--espaco-3);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-controle);
+  background: var(--cor-cartao);
+  font-size: var(--tamanho-texto);
+  white-space: nowrap;
+}
+
+.opcao span svg {
+  width: 18px;
+  height: 18px;
+  color: var(--cor-texto-secundario);
+}
+
+.opcao:hover span {
+  background: var(--cor-superficie);
+}
+
+.opcao input:checked + span {
+  border-color: var(--cor-marca);
+  background: var(--cor-marca-suave);
+  font-weight: 600;
+}
+
+.opcao input:checked + span svg {
+  color: var(--cor-marca);
+}
+
+.opcao input:focus-visible + span {
+  outline: 2px solid var(--cor-marca);
+  outline-offset: 2px;
+}
+
+.opcaoBranco {
+  color: var(--cor-texto-secundario);
+}
+
+/* Lista dos digitados */
+.lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-4);
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--espaco-3);
+}
+
+.filtros > div {
+  min-width: 160px;
+}
+
+.duasLinhas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espaco-1);
+}
+
+.secundario {
+  font-size: var(--tamanho-legenda);
+  color: var(--cor-texto-secundario);
+}
+
+.valorNota {
+  font-family: var(--fonte-titulo);
+}
+
+.acoesLinha {
+  display: inline-flex;
+  gap: var(--espaco-1);
+}
+
+.paginacao {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.acoesPaginacao {
+  display: flex;
+  gap: var(--espaco-1);
+}

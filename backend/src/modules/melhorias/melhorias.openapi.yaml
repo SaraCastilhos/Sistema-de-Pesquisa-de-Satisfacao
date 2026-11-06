@@ -1,5 +1,0 @@
-# Contrato das rotas do módulo melhorias, juntado aos demais por src/docs/swagger.js
-tags:
-  - name: Melhorias
-    description: Melhorias exibidas no TV Wall
-paths: {}

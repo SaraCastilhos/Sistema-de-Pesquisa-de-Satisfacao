@@ -1,5 +1,265 @@
 # Contrato das rotas do módulo etapas, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Etapas
-    description: Etapas da jornada do paciente (RF06, RF20)
-paths: {}
+    description: Etapas da jornada do paciente de cada setor (RF06, RF20, D15)
+paths:
+  /api/etapas:
+    get:
+      tags: [Etapas]
+      summary: Lista as etapas de um setor
+      description: >
+        Etapas do setor na ordem da pesquisa. Super Admin vê as de qualquer setor; Gestor, só as
+        dos setores atribuídos a ele (RNF10). Sem o filtro de ativo, vêm todas, porque o dashboard
+        também filtra por etapas desativadas que têm respostas antigas.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: setorId
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: ativo
+          in: query
+          required: false
+          description: Filtra por etapas ativas (true) ou desativadas (false). Sem o filtro, vêm todas.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Etapas do setor, na ordem
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Etapa'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          description: Perfil sem acesso (SEM_PERMISSAO) ou setor de outro gestor (SETOR_FORA_DO_ESCOPO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+    post:
+      tags: [Etapas]
+      summary: Cadastra uma etapa num setor (só Super Admin)
+      description: >
+        A etapa entra no fim do setor (maior ordem do setor + 1). O nome é único dentro do setor,
+        sem diferenciar maiúsculas nem acentos ("medico" e "Médico" são o mesmo nome); o mesmo
+        nome em outro setor é aceito (D15, D16). A criação é registrada no log.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EtapaEntrada'
+            example: { setorId: 1, nome: Farmácia }
+      responses:
+        '201':
+          description: Etapa criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Etapa'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: >
+            Já existe uma etapa com esse nome no setor, sem diferenciar maiúsculas nem acentos
+            (ETAPA_JA_EXISTE), ou as etapas do setor foram alteradas ao mesmo tempo
+            (ORDEM_EM_CONFLITO; basta tentar de novo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              example:
+                erro:
+                  codigo: ETAPA_JA_EXISTE
+                  mensagem: Já existe uma etapa com esse nome no setor.
+                  detalhes: [{ campo: body.nome, mensagem: Já está em uso neste setor. }]
+  /api/etapas/ordem:
+    put:
+      tags: [Etapas]
+      summary: Reordena todas as etapas de um setor (só Super Admin)
+      description: >
+        Envie os ids de TODAS as etapas do setor (ativas e desativadas), cada um uma vez, na ordem
+        nova: o primeiro da lista vira a etapa 1. Devolve as etapas do setor já na ordem nova. A
+        reordenação é registrada no log, com a ordem de antes e a de depois; a mesma ordem de
+        antes não grava nada.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EtapaOrdem'
+            example: { setorId: 1, etapaIds: [1, 5, 2, 3, 4] }
+      responses:
+        '200':
+          description: Etapas do setor, na ordem nova
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Etapa'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: As etapas do setor foram alteradas ao mesmo tempo (ORDEM_EM_CONFLITO; basta tentar de novo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: >
+            A lista não tem todas as etapas do setor, repete uma etapa ou traz etapa de outro setor
+            (ORDEM_DE_ETAPAS_INVALIDA). Os detalhes dizem quais etapas o setor tem.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+              example:
+                erro:
+                  codigo: ORDEM_DE_ETAPAS_INVALIDA
+                  mensagem: Envie todas as etapas do setor, cada uma uma vez, na ordem nova.
+                  detalhes:
+                    [{ campo: body.etapaIds, mensagem: 'O setor tem as etapas 1, 2, 3, 4, 5.' }]
+  /api/etapas/{id}:
+    patch:
+      tags: [Etapas]
+      summary: Renomeia, desativa, reativa ou marca uma etapa para o TV Wall (só Super Admin)
+      description: >
+        Envie só os campos que mudam. O setor da etapa nunca muda, e etapas nunca são apagadas:
+        para tirar uma etapa da pesquisa, envie ativo = false (D6, D15). Desativar é permitido
+        mesmo com perguntas ativas; as respostas antigas continuam nos indicadores. exibirTvWall =
+        true mostra a satisfação da etapa no TV Wall, se ela tiver o mínimo de avaliações no mês
+        (RF31, RN08). A alteração é registrada no log, com os dados de antes e de depois.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EtapaAlteracao'
+            examples:
+              renomear:
+                summary: Renomear
+                value: { nome: Atendimento médico }
+              desativar:
+                summary: Desativar
+                value: { ativo: false }
+              tvWall:
+                summary: Mostrar no TV Wall
+                value: { exibirTvWall: true }
+      responses:
+        '200':
+          description: Etapa alterada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Etapa'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Etapa não encontrada (ETAPA_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Já existe uma etapa com esse nome no setor, sem diferenciar maiúsculas nem acentos (ETAPA_JA_EXISTE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    Etapa:
+      type: object
+      required: [id, setorId, nome, ordem, ativo, exibirTvWall]
+      properties:
+        id: { type: integer, examples: [1] }
+        setorId: { type: integer, examples: [1] }
+        nome: { type: string, examples: [Recepção] }
+        ordem:
+          { type: integer, minimum: 1, description: Posição na pesquisa do setor, examples: [1] }
+        ativo: { type: boolean, examples: [true] }
+        exibirTvWall:
+          type: boolean
+          examples: [false]
+          description: Marcada pelo Super Admin para aparecer no TV Wall (RF31)
+    EtapaEntrada:
+      type: object
+      additionalProperties: false
+      required: [setorId, nome]
+      properties:
+        setorId: { type: integer, minimum: 1 }
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 40
+          description: Espaços nas pontas são removidos
+    EtapaAlteracao:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 40 }
+        ativo: { type: boolean }
+        exibirTvWall: { type: boolean }
+    EtapaOrdem:
+      type: object
+      additionalProperties: false
+      required: [setorId, etapaIds]
+      properties:
+        setorId: { type: integer, minimum: 1 }
+        etapaIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: integer, minimum: 1 }
+          description: Ids de todas as etapas do setor, na ordem nova

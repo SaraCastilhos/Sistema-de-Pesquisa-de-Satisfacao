@@ -1,0 +1,15 @@
+// Componentes base (FM1). Importe daqui: import { Botao, Cartao } from '../componentes';
+export { default as AreaTexto } from './AreaTexto';
+export { default as Aviso } from './Aviso';
+export { default as Botao } from './Botao';
+export { default as CabecalhoPagina } from './CabecalhoPagina';
+export { default as CaixaMarcacao } from './CaixaMarcacao';
+export { default as CampoTexto } from './CampoTexto';
+export { default as Carregando } from './Carregando';
+export { default as Cartao } from './Cartao';
+export { default as EstadoVazio } from './EstadoVazio';
+export { default as Interruptor } from './Interruptor';
+export { default as Modal } from './Modal';
+export { default as Selecao } from './Selecao';
+export { default as Selo } from './Selo';
+export { default as Tabela } from './Tabela';

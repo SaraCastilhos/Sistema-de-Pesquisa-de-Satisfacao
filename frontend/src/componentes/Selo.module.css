@@ -1,0 +1,40 @@
+.selo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espaco-1);
+  padding: 3px 8px;
+  border-radius: var(--raio-selo);
+  font-size: var(--tamanho-legenda);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.selo svg {
+  width: 12px;
+  height: 12px;
+}
+
+.sucesso {
+  background: var(--cor-sucesso-suave);
+  color: var(--cor-sucesso);
+}
+
+.atencao {
+  background: var(--cor-atencao-suave);
+  color: var(--cor-atencao);
+}
+
+.perigo {
+  background: var(--cor-perigo-suave);
+  color: var(--cor-perigo);
+}
+
+.neutro {
+  background: var(--cor-neutra-suave);
+  color: var(--cor-neutra);
+}
+
+.info {
+  background: var(--cor-info-suave);
+  color: var(--cor-info);
+}

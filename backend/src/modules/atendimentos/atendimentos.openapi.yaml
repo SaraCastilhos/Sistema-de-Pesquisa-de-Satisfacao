@@ -1,5 +1,121 @@
 # Contrato das rotas do módulo atendimentos, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Atendimentos
-    description: Atendimentos mensais por setor
-paths: {}
+    description: Atendimentos mensais de cada setor, base da taxa de adesão (RF25, RF27)
+paths:
+  /api/atendimentos:
+    get:
+      tags: [Atendimentos]
+      summary: Lista os atendimentos informados num período (só Super Admin)
+      description: >
+        Quantidades informadas por setor e mês, do mês de início ao de fim (os dois incluídos), em
+        ordem de mês e de nome do setor. Mês sem registro não aparece: no dashboard, ele fica como
+        "atendimentos não informados".
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: inicio
+          in: query
+          required: true
+          description: 'Primeiro mês, no formato AAAA-MM (ex.: 2026-08)'
+          example: '2026-08'
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        - name: fim
+          in: query
+          required: true
+          description: 'Último mês, no formato AAAA-MM (ex.: 2026-10); não pode ser antes do início'
+          example: '2026-10'
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+      responses:
+        '200':
+          description: Atendimentos do período
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AtendimentoMensal'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+  /api/atendimentos/{setorId}/{competencia}:
+    put:
+      tags: [Atendimentos]
+      summary: Informa ou corrige os atendimentos de um setor num mês (só Super Admin)
+      description: >
+        Cria o registro do mês ou substitui a quantidade, se ele já existir. Grava quem informou.
+        Vale também para setor desativado, para corrigir meses em que ele funcionava. A gravação é
+        registrada no log e atualiza a taxa de adesão do dashboard e do TV Wall.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: setorId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+        - name: competencia
+          in: path
+          required: true
+          description: 'Mês de referência, no formato AAAA-MM (ex.: 2026-10)'
+          example: '2026-10'
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtendimentoEntrada'
+            example: { quantidade: 1250 }
+      responses:
+        '200':
+          description: Atendimentos do mês gravados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AtendimentoMensal'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    AtendimentoMensal:
+      type: object
+      required: [id, setorId, competencia, quantidade, setor, informadoPor, criadoEm, atualizadoEm]
+      properties:
+        id: { type: integer, examples: [1] }
+        setorId: { type: integer, examples: [1] }
+        competencia: { type: string, description: Mês no formato AAAA-MM, examples: ['2026-10'] }
+        quantidade: { type: integer, minimum: 1, examples: [1250] }
+        setor:
+          type: object
+          required: [id, nome]
+          properties:
+            id: { type: integer }
+            nome: { type: string, examples: [Pronto Atendimento] }
+        informadoPor:
+          type: object
+          description: Quem informou ou corrigiu por último
+          required: [id, nome]
+          properties:
+            id: { type: integer }
+            nome: { type: string }
+        criadoEm: { type: string, format: date-time }
+        atualizadoEm: { type: string, format: date-time }
+    AtendimentoEntrada:
+      type: object
+      additionalProperties: false
+      required: [quantidade]
+      properties:
+        quantidade: { type: integer, minimum: 1, maximum: 10000000 }

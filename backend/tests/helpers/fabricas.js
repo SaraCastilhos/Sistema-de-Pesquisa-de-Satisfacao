@@ -7,7 +7,9 @@ const { CUSTO_BCRYPT_TESTE } = require('./banco');
 
 // Fábricas de dados de teste: criam só o necessário para cada caso, com valores únicos,
 // para que cada teste deixe claro do que depende (seção 4.1 do plano de testes).
-// Use depois de limparBanco(), que cria etapas, turnos, Super Admin e termos v1.
+// Use depois de limparBanco(), que cria turnos, Super Admin e termos v1 (etapas não: cada uma
+// pertence a um setor e é criada com criarEtapa). criarSessao cria sessões de celular, tablet ou
+// formulário de papel (canal PAPEL, RF33), com ou sem respondente e tipo de atendimento (RF32).
 let sequencia = 0;
 const proximo = () => ++sequencia;
 
@@ -25,56 +27,50 @@ async function criarEquipe({ setorId, nome, ativo = true } = {}) {
   });
 }
 
-// opcoes: textos das alternativas (múltipla escolha). Por padrão, duas alternativas.
-async function criarPergunta({
-  setorId,
-  etapaId,
-  tipo = 'ROSTINHO',
-  texto,
-  ordem,
-  ativa = true,
-  opcoes,
-} = {}) {
+// Etapa de um setor (D15); sem setorId, cria um setor novo
+async function criarEtapa({ setorId, nome, ordem, ativo = true, exibirTvWall = false } = {}) {
   const setor = setorId ?? (await criarSetor()).id;
-  const etapa =
-    etapaId === undefined && tipo !== 'DATA_PERIODO'
-      ? (await prisma.etapa.findFirst({ orderBy: { ordem: 'asc' } })).id
-      : etapaId;
-  const alternativas = opcoes ?? (tipo === 'MULTIPLA_ESCOLHA' ? ['Opção A', 'Opção B'] : []);
   const n = proximo();
-
-  return prisma.pergunta.create({
+  return prisma.etapa.create({
     data: {
       setorId: setor,
-      etapaId: etapa ?? null,
-      tipo,
-      texto: texto ?? `Pergunta ${n}?`,
+      nome: nome ?? `Etapa ${n}`,
       ordem: ordem ?? n,
-      ativa,
-      opcoes: {
-        create: alternativas.map((textoOpcao, indice) => ({
-          texto: textoOpcao,
-          ordem: indice + 1,
-        })),
-      },
+      ativo,
+      exibirTvWall,
     },
-    include: { opcoes: { orderBy: { ordem: 'asc' } } },
   });
 }
 
-// nota: nota geral de 0 a 10; com nota, a sessão fica concluída (ck_sessao_conclusao)
+// Pergunta de rostinho (a única que existe, RF22); sem etapaId, cria uma etapa num setor novo
+async function criarPergunta({ etapaId, texto, ordem, ativa = true } = {}) {
+  const etapa = etapaId ?? (await criarEtapa()).id;
+  const n = proximo();
+  return prisma.pergunta.create({
+    data: { etapaId: etapa, texto: texto ?? `Pergunta ${n}?`, ordem: ordem ?? n, ativa },
+  });
+}
+
+// nota: nota geral de 0 a 10; com nota, a sessão fica concluída (ck_sessao_conclusao).
+// turnoId: sem ele, o primeiro turno ativo; null = sessão sem turno, que só o canal PAPEL aceita
+// (ck_sessao_turno_so_papel_vazio). turnoOrigem: sem ele, CALCULADO no celular e no tablet e
+// INFORMADO no papel; ESTIMADO só no papel (ck_sessao_origem_por_canal, D19).
+// respondente e tipoAtendimento: opcionais, vazios = não informados (RF32, D18).
 async function criarSessao({
   setorId,
   turnoId,
   nota = null,
   canal = 'CELULAR',
   dataAtendimento = hojeLocal(),
-  etapaIds = [],
+  turnoOrigem = canal === 'PAPEL' ? 'INFORMADO' : 'CALCULADO',
+  respondente = null,
+  tipoAtendimento = null,
 } = {}) {
   const setor = setorId ?? (await criarSetor()).id;
   const turno =
-    turnoId ??
-    (await prisma.turno.findFirst({ where: { ativo: true }, orderBy: { id: 'asc' } })).id;
+    turnoId === undefined
+      ? (await prisma.turno.findFirst({ where: { ativo: true }, orderBy: { id: 'asc' } })).id
+      : turnoId;
   const agora = new Date();
 
   return prisma.sessao.create({
@@ -83,10 +79,12 @@ async function criarSessao({
       turnoId: turno,
       canal,
       dataAtendimento: paraDataBanco(dataAtendimento),
+      turnoOrigem,
+      respondente,
+      tipoAtendimento,
       notaGeral: nota,
       iniciadaEm: agora,
       concluidaEm: nota === null ? null : agora,
-      etapas: { create: etapaIds.map((etapaId) => ({ etapaId })) },
     },
   });
 }
@@ -127,6 +125,7 @@ async function criarUsuario({
 module.exports = {
   criarSetor,
   criarEquipe,
+  criarEtapa,
   criarPergunta,
   criarSessao,
   criarUsuario,

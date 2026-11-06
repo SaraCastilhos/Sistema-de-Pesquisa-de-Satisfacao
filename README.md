@@ -1,8 +1,17 @@
 # Sistema de Pesquisa de Satisfação — FHDOD
 
-Plataforma web de pesquisa de satisfação para a **Fundação Hospitalar Dr. Oswaldo Diesel (FHDOD)**, de Três Coroas/RS. O sistema substitui o formulário em papel da Ouvidoria por uma pesquisa respondida pelo celular ou pelo tablet do setor, com indicadores para a gestão e uma tela pública de resultados nas áreas de espera.
+Plataforma web de pesquisa de satisfação para a **Fundação Hospitalar Dr. Oswaldo Diesel (FHDOD)**, de Três Coroas/RS. O sistema leva a pesquisa ao celular e ao tablet do setor, traz para dentro dele os formulários de papel da Ouvidoria, que continuam em uso e passam a ser digitados no sistema, e oferece indicadores para a gestão e uma tela pública de resultados nas áreas de espera.
 
 Projeto Integrador 2026/2 — Curso Técnico em Informática.
+
+## Sistema publicado
+
+| O quê | Endereço |
+| --- | --- |
+| Sistema (pesquisa, painel e TV Wall) | <https://sistema-de-pesquisa-de-satisfacao-b.vercel.app> |
+| Documentação da API (Swagger) | <https://sistema-de-pesquisa-de-satisfacao.onrender.com/api/docs> |
+
+A API roda no plano gratuito do Render, que "dorme" após 15 minutos sem acesso: a primeira chamada depois disso pode levar até 1 minuto.
 
 ## O problema
 
@@ -13,9 +22,9 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | Parte | Para quem | O que faz |
 | --- | --- | --- |
 | **Pesquisa do paciente** | Pacientes e acompanhantes, sem login | Pesquisa por setor, aberta por QR Code, respondida só com toques e em menos de 1 minuto |
-| **Módulo da Ouvidoria** | Super Admin | Reúne elogios, reclamações e sugestões de todos os canais e acompanha cada retorno ao paciente |
+| **Módulo da Ouvidoria** | Super Admin | Reúne elogios, reclamações e sugestões de todos os canais, acompanha cada retorno ao paciente e digita os formulários de papel |
 | **Dashboard** | Super Admin e Gestores | Indicadores do hospital até setor, turno e equipe, com exportação em Excel e relatório mensal em PDF |
-| **TV Wall** | Áreas de espera | Visão geral do hospital, elogios aprovados e melhorias feitas a partir das respostas |
+| **TV Wall** | Áreas de espera | Satisfação do hospital em porcentagem e, quando a Ouvidoria escolher, a de setores e etapas, com o QR Code da pesquisa |
 
 ## Tecnologias
 
@@ -24,7 +33,7 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | Frontend | React (Vite) | Vercel |
 | Backend | Node.js, Express, Prisma | Render |
 | Banco de dados | PostgreSQL | Neon |
-| Testes | Jest, Supertest | — |
+| Testes | Jest e Supertest (backend), Vitest (frontend) | — |
 | Documentação da API | Swagger (OpenAPI) | — |
 
 ## Documentação
@@ -41,6 +50,7 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | Documento | Conteúdo |
 | --- | --- |
 | [Arquitetura do Backend](docs/arquitetura-backend.md) | Camadas, padrões de projeto, contrato da API e decisões técnicas |
+| [Rastreabilidade do Backend](docs/rastreabilidade-backend.md) | Ligação de cada requisito com o código e os testes |
 | [Plano e Relatório de Testes](docs/plano-e-relatorio-de-testes.md) | Estratégia, casos de teste por requisito e resultados da execução |
 
 **Banco de dados**

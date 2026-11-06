@@ -1,0 +1,28 @@
+.cabecalho {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--espaco-4);
+  margin-bottom: var(--espaco-8);
+}
+
+.sobrelinha {
+  margin-bottom: var(--espaco-2);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--cor-texto-secundario);
+}
+
+.subtitulo {
+  margin-top: var(--espaco-2);
+  font-size: var(--tamanho-pequeno);
+  color: var(--cor-texto-secundario);
+}
+
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espaco-2);
+}

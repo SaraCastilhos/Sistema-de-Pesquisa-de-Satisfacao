@@ -32,6 +32,7 @@ paths:
                   status:
                     type: string
                     const: ok
+              example: { status: ok }
 components:
   securitySchemes:
     bearerAuth:

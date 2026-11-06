@@ -45,17 +45,14 @@ O Prisma gera, a partir do `schema.prisma`, uma classe de acesso para cada model
 | `AtendimentoMensal` | `atendimento_mensal` | `prisma.atendimentoMensal` | `atendimentos.repository` |
 | `Etapa` | `etapa` | `prisma.etapa` | `etapas.repository` (cadastro); `perguntas.repository` e `pesquisa.repository` também leem |
 | `Pergunta` | `pergunta` | `prisma.pergunta` | `perguntas.repository` |
-| `OpcaoPergunta` | `opcao_pergunta` | `prisma.opcaoPergunta` | `perguntas.repository` |
-| `Sessao` | `sessao` | `prisma.sessao` | `pesquisa.repository` |
-| `SessaoEtapa` | `sessao_etapa` | `prisma.sessaoEtapa` | `pesquisa.repository` |
-| `Resposta` | `resposta` | `prisma.resposta` | `pesquisa.repository` |
+| `Sessao` | `sessao` | `prisma.sessao` | `pesquisa.repository`; `pesquisa.papel.repository` (só canal `PAPEL`) |
+| `Resposta` | `resposta` | `prisma.resposta` | `pesquisa.repository`; `pesquisa.papel.repository` (só respostas de sessão `PAPEL`) |
 | `TermoPrivacidade` | `termo_privacidade` | `prisma.termoPrivacidade` | `termos.repository` |
 | `Manifestacao` | `manifestacao` | `prisma.manifestacao` | `manifestacoes.repository` |
 | `TentativaContato` | `tentativa_contato` | `prisma.tentativaContato` | `manifestacoes.repository` |
 | `AnexoManifestacao` | `anexo_manifestacao` | `prisma.anexoManifestacao` | `manifestacoes.repository` |
-| `Melhoria` | `melhoria` | `prisma.melhoria` | `melhorias.repository` |
 
-Os módulos `indicadores` e `tvwall` não têm tabela própria. Seus repositories só **leem** as tabelas de pesquisa e Ouvidoria com consultas agregadas (seção 4).
+Os módulos `indicadores` e `tvwall` não têm tabela própria. Seus repositories só **leem** as tabelas de pesquisa e Ouvidoria com consultas agregadas (seção 4). O TV Wall também lê as marcações `exibir_tv_wall` de `setor` e `etapa` (D17 do modelo).
 
 ---
 
@@ -69,18 +66,17 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 | `usuarios` | `listar`, `criar`, `atualizar`, `definirSetores`, `listarSetoresDoGestor` | `usuario`, `gestor_setor` | Leitura e escrita; `definirSetores` substitui as atribuições numa transação |
 | `auditoria` | `registrar` | `log_auditoria` | Só inserção |
 | `setores` | `listar`, `buscarPorId`, `buscarPorSlug`, `criar`, `atualizar` | `setor` | Leitura e escrita, sem exclusão |
-| `etapas` | `listar`, `buscarPorId`, `criar`, `atualizar`, `reordenar` | `etapa` | Leitura e escrita, sem exclusão; `reordenar` grava em duas fases numa transação, porque `ordem` é única |
+| `etapas` | `listarDoSetor`, `buscarPorId`, `criar`, `atualizar`, `reordenar` | `etapa` | Leitura e escrita, sem exclusão; `reordenar` grava em duas fases numa transação, porque `ordem` é única dentro do setor |
 | `turnos` | `listarAtivos`, `salvarGrade` | `turno` | `salvarGrade` cria, altera e desativa numa transação |
 | `equipes` | `listarDoSetor`, `listarAtivasDosSetores`, `criar`, `atualizar` | `equipe` | Leitura e escrita, sem exclusão; nome repetido é recusado pelo banco (D16) e traduzido em `409` |
 | `escalas` | `listarDoMes`, `substituirMes` | `escala` | Importação em transação (consulta 4.9) |
 | `atendimentos` | `listarDoMes`, `salvar` | `atendimento_mensal` | `upsert` por setor e mês |
-| `perguntas` | `listarAtivasDoSetor`, `listar`, `criar`, `atualizar`, `reordenar`, `contarRespostas` | `pergunta`, `opcao_pergunta`, `etapa` | Leitura e escrita, sem exclusão |
-| `pesquisa` | `abrirSessao`, `buscarSessao`, `gravarEtapas`, `gravarResposta`, `gravarNota` | `sessao`, `sessao_etapa`, `resposta` | Só inserção, mais a gravação única da nota |
+| `perguntas` | `listarDoSetor`, `criar`, `atualizar`, `reordenar` | `pergunta`, `etapa` | Leitura e escrita, sem exclusão; o setor da pergunta é o da etapa |
+| `pesquisa` | `abrirSessao`, `buscarSessao`, `informarAtendimento`, `informarRespondente`, `gravarResposta`, `gravarNota`, e, em `pesquisa.papel.repository`, as do formulário de papel (`criarSessao`, `atualizarSessao`, `gravarRespostas`, `apagarRespostas`, `excluirSessao`, `listar`, `listarDigitacoes`) | `sessao`, `resposta` | Na pesquisa, só inserção, mais a gravação única da data informada, de quem respondeu e da nota. No formulário de papel (canal `PAPEL`), digitação, correção e exclusão, cada uma numa transação com o log (consulta 4.13) |
 | `termos` | `buscarVigente`, `listar`, `criarVersao` | `termo_privacidade` | Só inserção (cada versão é nova) |
-| `manifestacoes` | `criar`, `listar`, `buscarDetalhe`, `listarAlertas`, `existeDuplicata`, `classificar`, `registrarTentativa`, `finalizar`, `aprovarParaTvWall`, `anexarFoto`, `buscarFoto` | `manifestacao`, `tentativa_contato`, `anexo_manifestacao` | Leitura e escrita, sem exclusão |
-| `melhorias` | `listar`, `criar`, `atualizar` | `melhoria` | Leitura e escrita |
-| `indicadores` | `resumo`, `distribuicaoNotas`, `porEtapa`, `porEquipe`, `adesao`, `ranking`, `dadosExportacao` | Leitura de `sessao`, `resposta`, `pergunta`, `escala`, `equipe`, `atendimento_mensal`, `manifestacao` | Só leitura |
-| `tvwall` | `resumoDoMes`, `evolucaoSeisMeses`, `elogiosAprovados`, `melhoriasPublicadas` | Leitura de `sessao`, `resposta`, `manifestacao`, `melhoria` | Só leitura |
+| `manifestacoes` | `criar`, `listar`, `buscarDetalhe`, `listarAlertas`, `existeDuplicata`, `classificar`, `registrarTentativa`, `finalizar`, `anexarFoto`, `buscarFoto` | `manifestacao`, `tentativa_contato`, `anexo_manifestacao` | Leitura e escrita, sem exclusão |
+| `indicadores` | `resumo`, `distribuicaoNotas`, `evolucao`, `porSetor`, `porEtapa`, `porEquipe`, `adesao`, `dadosExportacao` | Leitura de `sessao`, `resposta`, `pergunta`, `etapa`, `escala`, `equipe`, `atendimento_mensal`, `manifestacao` | Só leitura |
+| `tvwall` | `resumoDoMes`, `evolucaoSeisMeses`, `setoresMarcados`, `etapasMarcadas` | Leitura de `sessao`, `resposta`, `pergunta`, `etapa`, `setor`, `atendimento_mensal` | Só leitura; devolve só porcentagens |
 
 **Funções puras usadas pelos services** (em `src/utils/`, sem acesso ao banco e cobertas por testes unitários):
 
@@ -99,21 +95,31 @@ Cada repository expõe funções com nomes de negócio. O service chama `pesquis
 
 Nas consultas abaixo, `$1`, `$2` etc. são os parâmetros. No código, eles são passados pelo *template literal* do `$queryRaw` (seção 6 de `padroes-banco-de-dados.md`) e nunca concatenados ao SQL.
 
-Os filtros opcionais do dashboard (turno, etapa, canal) são acrescentados com fragmentos `Prisma.sql`, que continuam parametrizados:
+Os filtros opcionais do dashboard (turno, etapa, canal, quem respondeu e tipo de atendimento) são acrescentados com fragmentos `Prisma.sql`, que continuam parametrizados:
 
 ```js
 const { Prisma } = require('@prisma/client');
 
 const filtroTurno = turnoId ? Prisma.sql`AND s.turno_id = ${turnoId}` : Prisma.empty;
 const filtroCanal = canal ? Prisma.sql`AND s.canal = ${canal}::canal_resposta` : Prisma.empty;
+const filtroRespondente = respondente
+  ? Prisma.sql`AND s.respondente = ${respondente}::respondente`
+  : Prisma.empty;
+const filtroTipo = tipoAtendimento
+  ? Prisma.sql`AND s.tipo_atendimento = ${tipoAtendimento}::tipo_atendimento`
+  : Prisma.empty;
 
 await prisma.$queryRaw`
   SELECT COUNT(*) FROM sessao s
   WHERE s.data_atendimento BETWEEN ${inicio} AND ${fim}
     AND s.setor_id = ANY(${setorIds})
     ${filtroTurno}
-    ${filtroCanal}`;
+    ${filtroCanal}
+    ${filtroRespondente}
+    ${filtroTipo}`;
 ```
+
+Com o filtro de turno, a sessão de papel sem turno (`turno_id` vazio, D19 do modelo) fica de fora sem nenhum código a mais, porque `NULL = 3` nunca é verdadeiro no SQL (RN04). Sem o filtro, ela entra nos indicadores do período como qualquer outra.
 
 O parâmetro `setorIds` sempre vem do service: para o Super Admin, os setores filtrados (ou todos); para o Gestor, apenas os atribuídos a ele (RNF10). Nenhuma consulta de indicador roda sem esse filtro.
 
@@ -148,26 +154,42 @@ prisma.sessao.create({
 });
 ```
 
+A sessão de papel (RF33) não passa por esse cálculo: ela é criada pela digitação, com a data e o turno escritos no formulário (`INFORMADO`), a data de recolhimento (`ESTIMADO`) ou sem turno (D19 do modelo). As restrições `ck_sessao_turno_so_papel_vazio` e `ck_sessao_origem_por_canal` recusam qualquer outra combinação.
+
 ### 4.2 Gravar uma resposta (RF07, RF13, D5)
 
 ```js
 prisma.resposta.create({
-  data: { sessaoId, perguntaId, pulada, valorNumero, valorBooleano, opcaoId, valorData, turnoId },
+  data: { sessaoId, perguntaId, pulada, valorNumero }, // valorNumero: rostinho de 1 a 5, ou null se pulada
 });
 ```
 
 A restrição única (`sessao_id`, `pergunta_id`) recusa a segunda gravação da mesma pergunta. O Prisma lança o erro `P2002`, que o service converte em `409 Conflict`.
 
-Quando a pergunta é de data e período, a resposta e a atualização da sessão acontecem **na mesma transação**:
+A data e o período informados pela tela do celular (RN03, D2) não são uma resposta: vão direto para a sessão, uma única vez, com a condição dentro do próprio comando, como na nota (4.3):
 
 ```js
-prisma.$transaction([
-  prisma.resposta.create({ data: { sessaoId, perguntaId, valorData, turnoId } }),
-  prisma.sessao.update({
-    where: { id: sessaoId },
-    data: { dataAtendimento: valorData, turnoId, turnoOrigem: 'INFORMADO' },
-  }),
-]);
+const { count } = await prisma.sessao.updateMany({
+  where: { id: sessaoId, canal: 'CELULAR', turnoOrigem: 'CALCULADO', iniciadaEm: { gt: limite12Horas } },
+  data: { dataAtendimento, turnoId, turnoOrigem: 'INFORMADO' },
+});
+// count === 0: o service verifica se a sessão não existe (404), é de tablet (422) ou já foi informada ou expirou (409)
+```
+
+Quem respondeu e o tipo de atendimento, da tela "Sobre o atendimento" (RF32, D18), seguem o mesmo padrão, no celular e no tablet. O corpo vazio é recusado com `400` pela validação, e a condição "os dois ainda vazios" garante a gravação única:
+
+```js
+const { count } = await prisma.sessao.updateMany({
+  where: {
+    id: sessaoId,
+    canal: { in: ['CELULAR', 'TABLET'] },
+    respondente: null,
+    tipoAtendimento: null,
+    iniciadaEm: { gt: limite12Horas },
+  },
+  data: { respondente, tipoAtendimento }, // um dos dois pode ficar vazio
+});
+// count === 0: o service verifica se a sessão não existe (404) ou já foi informada ou expirou (409)
 ```
 
 ### 4.3 Gravar a nota geral uma única vez (RF03, RN01)
@@ -259,22 +281,24 @@ Os dois `LEFT JOIN` garantem que todo setor apareça, mesmo sem respostas ou sem
 ### 4.6 Avaliação por etapa (RF28, RN01)
 
 ```sql
-SELECT e.nome                      AS etapa,
-       COUNT(r.valor_numero)       AS respostas,
-       ROUND(AVG(r.valor_numero), 2) AS media
+SELECT st.nome                        AS setor,
+       e.nome                         AS etapa,
+       COUNT(*)                       AS avaliacoes,
+       ROUND(AVG(r.valor_numero), 2)  AS media,
+       ROUND(100.0 * COUNT(*) FILTER (WHERE r.valor_numero >= $4) / COUNT(*)) AS indice
 FROM resposta r
 JOIN pergunta p ON p.id = r.pergunta_id
 JOIN etapa e    ON e.id = p.etapa_id
+JOIN setor st   ON st.id = e.setor_id
 JOIN sessao s   ON s.id = r.sessao_id
-WHERE p.tipo = 'ROSTINHO'
-  AND NOT r.pulada
+WHERE NOT r.pulada
   AND s.data_atendimento BETWEEN $1 AND $2
-  AND s.setor_id = ANY($3)
-GROUP BY e.id, e.nome, e.ordem
-ORDER BY e.ordem;
+  AND e.setor_id = ANY($3)
+GROUP BY st.nome, e.id, e.nome, e.ordem
+ORDER BY st.nome, e.ordem;
 ```
 
-A consulta não exige `nota_geral`: respostas de pesquisas não concluídas também entram (RN01). Só os rostinhos são usados, para que todas as etapas sejam comparadas na mesma escala de 1 a 5 (seção 7.1 do modelo).
+A consulta não exige `nota_geral`: respostas de pesquisas não concluídas também entram (RN01). Toda pergunta é um rostinho (D4), então todas as etapas são comparadas na mesma escala de 1 a 5. `$4` é `REGRAS.ROSTINHO_POSITIVO_MINIMO` (4): o índice de satisfação é a porcentagem de rostinhos 4 e 5 (seção 7.1 do modelo).
 
 ### 4.7 Nota por equipe (RF28, RN04, D3)
 
@@ -294,7 +318,7 @@ GROUP BY eq.id, eq.nome
 ORDER BY nota_media DESC;
 ```
 
-A junção usa a restrição única de `escala` (`setor_id`, `data`, `turno_id`) como índice. Sessões de dias sem escala importada simplesmente não aparecem neste painel, mas continuam nos demais.
+A junção usa a restrição única de `escala` (`setor_id`, `data`, `turno_id`) como índice. Sessões de dias sem escala importada simplesmente não aparecem neste painel, mas continuam nos demais. O mesmo vale para a sessão de papel sem turno: `es.turno_id = s.turno_id` nunca é verdadeiro com `turno_id` vazio, então ela fica fora da nota por equipe (RN04, D19 do modelo).
 
 ### 4.8 Fila da Ouvidoria e alerta de 48 horas (RF14, RF16)
 
@@ -304,11 +328,13 @@ A lista com filtros usa o Prisma Client, com paginação:
 prisma.manifestacao.findMany({
   where: { status, tipo, setorId, turnoId, dataOcorrencia: { gte: inicio, lte: fim } },
   select: {
-    id: true, tipo: true, origem: true, status: true, dataOcorrencia: true, texto: true,
+    id: true, tipo: true, origem: true, status: true, dataOcorrencia: true,
     pediuRetorno: true, possivelDuplicata: true,
     setor: { select: { nome: true } },
+    etapa: { select: { nome: true } },
     turno: { select: { nome: true } },
     sessao: { select: { notaGeral: true } },
+    _count: { select: { tentativas: true } },
   },
   orderBy: { criadoEm: 'desc' },
   skip: (pagina - 1) * tamanho,
@@ -318,7 +344,7 @@ prisma.manifestacao.findMany({
 
 O filtro "a classificar" (RF14, RN12) é enviado ao Prisma como `tipo: null`, que vira `tipo IS NULL`. Sem filtro de tipo, o service passa `tipo: undefined`, que o Prisma ignora. Confundir os dois muda o resultado: `null` traz só as não classificadas, e `undefined` traz todas.
 
-O `select` lista os campos explicitamente e **não inclui** `telefoneCifrado`, `telefoneHash` nem `profissionalCitado`. Esses campos só são lidos na consulta de detalhe de um chamado (RNF10).
+O `select` lista os campos explicitamente e **não inclui** `texto`, `telefoneCifrado`, `telefoneHash` nem `profissionalCitado`. Esses campos só são lidos na consulta de detalhe de um chamado (RF14, RNF10). O filtro por protocolo usa o próprio `id`.
 
 Para o alerta, o banco devolve os candidatos e o service calcula as horas úteis com `horasUteis.entre`, que não depende de feriados nem de fuso no SQL:
 
@@ -386,13 +412,29 @@ Atendida pelo índice `manifestacao (telefone_hash, setor_id)`. O resultado só 
 
 ```js
 await prisma.$transaction(async (tx) => {
+  const antes = await tx.manifestacao.findUnique({
+    where: { id },
+    select: { tipo: true, status: true, pediuRetorno: true },
+  });
+  if (!antes) throw new AppError(404, 'MANIFESTACAO_NAO_ENCONTRADA', '...');
+  if (!['NOVA', 'EM_CONTATO'].includes(antes.status)) {
+    throw new AppError(409, 'CHAMADO_JA_FINALIZADO', '...');
+  }
+  // RN12: só se finaliza chamado classificado (ck_manifestacao_tipo_finalizacao)
+  if (antes.tipo === null) throw new AppError(422, 'TIPO_NAO_DEFINIDO', '...');
+
   if (status === 'SEM_RETORNO') {
+    // A anônima nunca fica "Sem retorno": vai de NOVA direto para ENCERRADA
+    if (!antes.pediuRetorno) throw new AppError(422, 'CHAMADO_SEM_TELEFONE', '...');
     const falhas = await tx.tentativaContato.count({
       where: { manifestacaoId: id, resultado: 'SEM_SUCESSO' },
     });
-    if (falhas < 3) throw new AppError(422, 'CHAMADO_SEM_TENTATIVAS_SUFICIENTES', '...');
+    if (falhas < REGRAS.TENTATIVAS_MINIMAS_SEM_RETORNO) {
+      throw new AppError(422, 'CHAMADO_SEM_TENTATIVAS_SUFICIENTES', '...');
+    }
   }
 
+  // O status entra no WHERE: se outra pessoa finalizou entre a leitura e aqui, count = 0
   const { count } = await tx.manifestacao.updateMany({
     where: { id, status: { in: ['NOVA', 'EM_CONTATO'] } },
     data: {
@@ -405,35 +447,38 @@ await prisma.$transaction(async (tx) => {
   await tx.logAuditoria.create({
     data: {
       usuarioId, acao: 'ANONIMIZACAO', entidade: 'manifestacao', entidadeId: String(id),
-      dadosNovos: { status, desfecho },
+      dadosAnteriores: { status: antes.status }, dadosNovos: { status, desfecho },
     },
   });
 });
 ```
 
-O telefone é apagado no mesmo comando que finaliza o chamado, e o banco recusaria a finalização sem isso (restrição `ck_manifestacao_finalizacao`). O log não recebe o telefone (seção 5.2 do modelo).
+O telefone é apagado no mesmo comando que finaliza o chamado, e o banco recusaria a finalização sem isso (restrição `ck_manifestacao_finalizacao`). O log não recebe o telefone (seção 5.2 do modelo). A ação é sempre `ANONIMIZACAO`, mesmo na manifestação anônima, para toda finalização ser encontrada no log da mesma forma.
+
+A tentativa de contato segue o mesmo cuidado: numa transação, um `updateMany` com `status IN ('NOVA', 'EM_CONTATO')` põe o chamado em `EM_CONTATO` (se outra pessoa o finalizou ao mesmo tempo, `count = 0` e a resposta é `409`) e só então a tentativa é gravada. Só a primeira tentativa, que muda `NOVA` para `EM_CONTATO`, grava log; as seguintes já ficam registradas na própria `tentativa_contato`, com o usuário e a data.
 
 ### 4.12 Painéis do TV Wall (RF30, RN08)
 
-Resumo do mês corrente, para o hospital inteiro:
+O TV Wall só devolve **porcentagens** (RN08, D17). Índice de satisfação do mês corrente, para o hospital inteiro:
 
 ```sql
 SELECT
-  ROUND(AVG(s.nota_geral), 1) AS nota_media,
-  COUNT(*) FILTER (
-    WHERE s.nota_geral IS NOT NULL
-       OR EXISTS (SELECT 1 FROM resposta r WHERE r.sessao_id = s.id AND NOT r.pulada)
-  )                            AS total_respostas
+  COUNT(*)                                                                   AS avaliacoes,
+  ROUND(100.0 * COUNT(*) FILTER (WHERE s.nota_geral >= $2) / NULLIF(COUNT(*), 0)) AS indice
 FROM sessao s
-WHERE s.data_atendimento >= date_trunc('month', $1::date)
+WHERE s.nota_geral IS NOT NULL
+  AND s.data_atendimento >= date_trunc('month', $1::date)
   AND s.data_atendimento <  date_trunc('month', $1::date) + INTERVAL '1 month';
 ```
 
-Evolução da nota nos últimos 6 meses:
+`$2` é `REGRAS.NOTA_POSITIVA_MINIMA` (7). A satisfação geral e a evolução **não têm mínimo de avaliações** (RF30, D17): só sem nenhuma avaliação o índice vem vazio e o painel sai do rodízio. A contagem de avaliações só serve para o service conferir o mínimo (`TV_WALL_MINIMO_RESPOSTAS`) dos setores e etapas marcados, mais abaixo, e **não vai para a resposta da API**. A taxa de adesão do mês é calculada como na consulta 4.5, só com os setores que têm atendimentos informados.
+
+Evolução do índice nos últimos 6 meses:
 
 ```sql
 SELECT date_trunc('month', s.data_atendimento)::date AS mes,
-       ROUND(AVG(s.nota_geral), 1)                   AS nota_media
+       COUNT(*)                                      AS avaliacoes,
+       ROUND(100.0 * COUNT(*) FILTER (WHERE s.nota_geral >= $2) / COUNT(*)) AS indice
 FROM sessao s
 WHERE s.nota_geral IS NOT NULL
   AND s.data_atendimento >= date_trunc('month', $1::date) - INTERVAL '5 months'
@@ -444,25 +489,33 @@ ORDER BY 1;
 
 `$1` é a data de hoje no fuso `America/Sao_Paulo`. Meses sem respostas não aparecem no resultado, e o service os completa como vazios, para o gráfico sempre mostrar 6 meses.
 
-Elogios e melhorias:
+Setores marcados (RF31): o mesmo índice da nota geral, agrupado por setor, só para `setor.ativo AND setor.exibir_tv_wall`, e só com os grupos que tenham pelo menos `TV_WALL_MINIMO_RESPOSTAS` avaliações no mês (`HAVING COUNT(*) >= $3`). Etapas marcadas: o índice dos rostinhos da consulta 4.6, só para `etapa.ativo AND etapa.exibir_tv_wall` de setor ativo, com o mesmo `HAVING`.
+
+Nenhuma consulta do TV Wall devolve contagens, turno, equipe, manifestações, nomes de pessoas ou telefones (RN08). Os resultados passam pelo cache por versão (seção 8 da arquitetura).
+
+### 4.13 Correção e exclusão do formulário de papel (RF33, RN01, RNF11)
+
+Só sessões de canal `PAPEL` passam por estas operações (D19 do modelo). O estado anterior completo, a sessão e todas as respostas, vai para o log **antes** da mudança, na mesma transação. Exclusão:
 
 ```js
-prisma.manifestacao.findMany({
-  where: { aprovadaTvWallEm: { not: null } },
-  select: { textoTvWall: true },          // nunca o texto original, o setor ou nomes
-  orderBy: { aprovadaTvWallEm: 'desc' },
-  take: 10,
-});
+await prisma.$transaction(async (tx) => {
+  const sessao = await tx.sessao.findFirst({
+    where: { id, canal: 'PAPEL' },
+    include: { respostas: true },
+  });
+  if (!sessao) throw new AppError(404, 'FORMULARIO_NAO_ENCONTRADO', '...'); // celular e tablet também dão 404
 
-prisma.melhoria.findMany({
-  where: { publicada: true },
-  select: { titulo: true, descricao: true, realizadaEm: true },
-  orderBy: { realizadaEm: 'desc' },
-  take: 10,
+  await auditoriaRepository.registrar(
+    { usuarioId, acao: 'EXCLUSAO', entidade: 'sessao', entidadeId: id, antes: sessao },
+    tx,
+  );
+  await tx.resposta.deleteMany({ where: { sessaoId: id } });
+  await tx.sessao.delete({ where: { id } });
 });
+versaoDados.incrementar(); // o formulário saiu dos indicadores (seção 8 da arquitetura)
 ```
 
-Nenhuma consulta do TV Wall recebe ou devolve setor, turno, equipe ou textos não aprovados (RN08). Os resultados passam pelo cache por versão (seção 8 da arquitetura).
+As respostas são apagadas antes da sessão porque a chave estrangeira usa `RESTRICT` (D6 do modelo). A correção segue o mesmo caminho, com a ação `ALTERACAO`, `antes` e `depois` no log e as respostas regravadas na transação.
 
 ---
 

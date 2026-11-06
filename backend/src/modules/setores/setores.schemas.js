@@ -36,9 +36,15 @@ const criar = {
 const atualizar = {
   params,
   body: z
-    .object({ nome: nome.optional(), slug: slug.optional(), ativo: z.boolean().optional() })
+    .object({
+      nome: nome.optional(),
+      slug: slug.optional(),
+      ativo: z.boolean().optional(),
+      // Marca o setor para aparecer no TV Wall (RF31)
+      exibirTvWall: z.boolean().optional(),
+    })
     .refine((corpo) => Object.keys(corpo).length > 0, {
-      message: 'Informe pelo menos um campo para alterar (nome, slug ou ativo).',
+      message: 'Informe pelo menos um campo para alterar (nome, slug, ativo ou exibirTvWall).',
     }),
 };
 

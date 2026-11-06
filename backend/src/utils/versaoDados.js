@@ -1,6 +1,7 @@
 // Versão dos dados que afetam os indicadores (seção 8 da arquitetura). Os services chamam
-// incrementar() depois de gravar resposta, nota, manifestação, aprovação, melhoria, escala ou
-// atendimentos; o cache do dashboard e do TV Wall compara com atual() para saber se recalcula.
+// incrementar() depois de gravar resposta, nota, data do atendimento, manifestação, escala,
+// atendimentos ou cadastros que aparecem nos painéis (setor, etapa, pergunta, marcação do TV Wall);
+// o cache do dashboard e do TV Wall compara com atual() para saber se recalcula.
 //
 // Fica em memória porque o plano gratuito do Render roda uma única instância da API
 // (seção 12 da arquitetura). Reiniciar a API zera o contador, o que só força um recálculo.

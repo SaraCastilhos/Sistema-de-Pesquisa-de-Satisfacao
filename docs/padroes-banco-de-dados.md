@@ -10,7 +10,7 @@ Este documento define as convenções de nomenclatura, tipos, migrações e escr
 
 ### 1.1 Regras gerais
 
-- Português, sem acentos nem cedilha (`sessao`, `manifestacao`, `opcao_pergunta`).
+- Português, sem acentos nem cedilha (`sessao`, `manifestacao`, `tentativa_contato`).
 - `snake_case` em minúsculas: palavras separadas por `_`.
 - Nomes completos, sem abreviações: `quantidade`, e não `qtd`. A exceção são siglas consagradas, como `url` e `id`.
 - Nenhuma palavra reservada do SQL como nome (`user`, `order`, `date`). A coluna `escala.data` é permitida porque `data` não é reservada no PostgreSQL.
@@ -20,8 +20,8 @@ Este documento define as convenções de nomenclatura, tipos, migrações e escr
 | Regra | Exemplo | Motivo |
 | --- | --- | --- |
 | Substantivo no **singular** | `setor`, `pergunta`, `sessao` | Os plurais em português são irregulares (`opcoes`, `sessoes`, `manifestacoes`), e o singular coincide com o nome do modelo no Prisma |
-| Tabela de ligação N:N: nomes das duas tabelas | `gestor_setor`, `sessao_etapa` | Deixa claro quais entidades ela liga |
-| Tabela que pertence a outra: entidade + dona | `opcao_pergunta`, `anexo_manifestacao` | Evita nomes genéricos como `opcao` ou `anexo` |
+| Tabela de ligação N:N: nomes das duas tabelas | `gestor_setor` | Deixa claro quais entidades ela liga |
+| Tabela que pertence a outra: entidade + dona | `anexo_manifestacao` | Evita nomes genéricos como `anexo` |
 
 ### 1.3 Colunas
 
@@ -31,18 +31,16 @@ Este documento define as convenções de nomenclatura, tipos, migrações e escr
 | Chave estrangeira | `<tabela_referenciada>_id` | `setor_id`, `pergunta_id` |
 | Chave estrangeira para usuário que fez uma ação | `<ação>_por_id` | `importada_por_id`, `criado_por_id` |
 | Momento (data com hora) | Particípio + `_em` | `criado_em`, `concluida_em`, `finalizada_em` |
-| Data sem hora | Substantivo descritivo | `data_atendimento`, `competencia`, `realizada_em`* |
-| Booleano | Adjetivo ou particípio, sem prefixo `is_`/`flag_` | `ativo`, `pulada`, `publicada`, `pediu_retorno` |
-| Valor de resposta | `valor_<tipo>` | `valor_numero`, `valor_booleano`, `valor_data` |
+| Data sem hora | Substantivo descritivo | `data_atendimento`, `competencia`, `data_ocorrencia` |
+| Booleano | Adjetivo, particípio ou verbo de ação, sem prefixo `is_`/`flag_` | `ativo`, `pulada`, `pediu_retorno`, `exibir_tv_wall` |
+| Valor de resposta | `valor_<tipo>` | `valor_numero` (o único desde que toda pergunta é um rostinho) |
 | Dado protegido | Nome do dado + forma de proteção | `senha_hash`, `telefone_cifrado`, `telefone_hash` |
-
-\* `melhoria.realizada_em` é uma data (`DATE`), e não um momento, porque a Ouvidoria registra apenas o dia em que a melhoria foi feita. O sufixo `_em` foi mantido pela leitura natural ("realizada em 10/10").
 
 O gênero do particípio concorda com a tabela: `sessao.concluida_em`, `manifestacao.finalizada_em`, mas `usuario.criado_em`. As colunas de controle `criado_em` e `atualizado_em` ficam sempre no masculino, em todas as tabelas, para que qualquer consulta genérica (como a do log de auditoria) use o mesmo nome.
 
 ### 1.4 Tipos enumerados
 
-- Nome do tipo: `snake_case`, no formato `<assunto>_<entidade>` (`status_manifestacao`, `tipo_pergunta`).
+- Nome do tipo: `snake_case`, no formato `<assunto>_<entidade>` (`status_manifestacao`, `tipo_manifestacao`).
 - Valores: MAIÚSCULAS, sem acentos, com `_` entre palavras (`EM_CONTATO`, `SUPER_ADMIN`).
 
 Um tipo enumerado é usado quando os valores possíveis são fixos e definidos pelos requisitos, como os status do RF15. Quando a lista é editável pelo usuário ou precisa de mais informações (nome exibido, ordem), usa-se uma tabela, como `etapa` e `turno`.
@@ -112,7 +110,7 @@ No banco vale o padrão do SQL (`snake_case`), e no código JavaScript vale o pa
 
 | Elemento | No banco | No Prisma | Como |
 | --- | --- | --- | --- |
-| Tabela | `opcao_pergunta` | `model OpcaoPergunta` | `@@map("opcao_pergunta")` |
+| Tabela | `anexo_manifestacao` | `model AnexoManifestacao` | `@@map("anexo_manifestacao")` |
 | Coluna | `nota_geral` | `notaGeral` | `@map("nota_geral")` |
 | Tipo enumerado | `status_manifestacao` | `enum StatusManifestacao` | `@@map("status_manifestacao")` |
 | Relação | `setor_id` | `setorId` e `setor` | `@relation(fields: [setorId], references: [id])` |
@@ -121,18 +119,20 @@ Exemplo:
 
 ```prisma
 model Sessao {
-  id              String        @id @default(uuid()) @db.Uuid
-  setorId         Int           @map("setor_id")
+  id              String           @id @default(uuid()) @db.Uuid
+  setorId         Int              @map("setor_id")
   canal           CanalResposta
-  dataAtendimento DateTime      @map("data_atendimento") @db.Date
-  turnoId         Int           @map("turno_id")
-  turnoOrigem     OrigemTurno   @default(CALCULADO) @map("turno_origem")
-  notaGeral       Int?          @map("nota_geral") @db.SmallInt
-  iniciadaEm      DateTime      @default(now()) @map("iniciada_em") @db.Timestamptz
-  concluidaEm     DateTime?     @map("concluida_em") @db.Timestamptz
+  dataAtendimento DateTime         @map("data_atendimento") @db.Date
+  turnoId         Int?             @map("turno_id")
+  turnoOrigem     OrigemTurno      @default(CALCULADO) @map("turno_origem")
+  respondente     Respondente?
+  tipoAtendimento TipoAtendimento? @map("tipo_atendimento")
+  notaGeral       Int?             @map("nota_geral") @db.SmallInt
+  iniciadaEm      DateTime         @default(now()) @map("iniciada_em") @db.Timestamptz
+  concluidaEm     DateTime?        @map("concluida_em") @db.Timestamptz
 
   setor     Setor      @relation(fields: [setorId], references: [id], onDelete: Restrict)
-  turno     Turno      @relation(fields: [turnoId], references: [id], onDelete: Restrict)
+  turno     Turno?     @relation(fields: [turnoId], references: [id], onDelete: Restrict)
   respostas Resposta[]
 
   @@index([setorId, dataAtendimento])
@@ -197,6 +197,8 @@ ALTER TABLE "manifestacao"
          OR (desfecho IS NOT NULL AND telefone_cifrado IS NULL AND telefone_hash IS NULL));
 ```
 
+- **Valor novo de enum usado numa restrição `CHECK`: duas migrações.** O PostgreSQL não deixa usar um valor de enum na mesma transação em que ele foi criado (erro `55P04`, "unsafe use of new value"), e cada migração roda numa transação só. A primeira migração só acrescenta os valores (`ALTER TYPE ... ADD VALUE`), e a segunda cria as restrições que os usam, com um comentário no topo de cada uma explicando a separação. Foi o caso de `ajustes_formulario_papel_valores` e `ajustes_formulario_papel`, que criam `ck_sessao_turno_so_papel_vazio` (só o canal `PAPEL` fica sem turno) e `ck_sessao_origem_por_canal` (a origem da data e do turno combina com o canal), D19 do modelo.
+
 A migração inicial, com todas as tabelas, chaves, índices e restrições, é o **script DDL** do projeto, e o arquivo `seed.js` (seção 5) é o **script DML**.
 
 ---
@@ -207,15 +209,24 @@ O arquivo `backend/prisma/seed.js` cria os dados necessários para o sistema fun
 
 | Grupo | Conteúdo | Em produção? |
 | --- | --- | --- |
-| Dados de referência | As 4 etapas da jornada; a versão 1 dos termos de privacidade | Sim |
-| Configuração inicial | Turnos padrão (manhã, tarde e noite); um Super Admin com e-mail e senha lidos de variáveis de ambiente | Sim |
-| Demonstração | Setores, equipes, perguntas de cada tipo, gestores, escala de um mês, sessões e manifestações fictícias | Não |
+| Dados de referência | A versão 1 dos termos de privacidade. Etapas não: cada uma pertence a um setor (D15 do modelo), e o banco nasce sem setores | Sim |
+| Configuração inicial | Turnos padrão Dia (07h–19h) e Noite (19h–07h), os do formulário de papel; um Super Admin com e-mail e senha lidos de variáveis de ambiente | Sim |
+| Demonstração | Os setores do formulário de papel (Pronto Atendimento, Internação Clínica e Raio X), com as etapas e as perguntas do papel e alguns setores e etapas marcados para o TV Wall; duas equipes por setor; um gestor de dois setores; escala e atendimentos mensais de 3 meses; cerca de 300 sessões, das quais cerca de 10% de formulários de papel (algumas sem nota, com data estimada ou sem turno); e manifestações anônimas da pesquisa e de outros canais | Não |
 
 Regras:
 
-- **O seed pode ser executado várias vezes sem duplicar dados.** Ele usa `upsert` pela chave natural (`etapa.nome`, `setor.slug`, `usuario.email`).
-- **Nenhuma senha fica no código.** A senha do Super Admin vem da variável `SEED_SUPER_ADMIN_SENHA`, e a de demonstração dos gestores também.
-- **Os dados de demonstração são claramente fictícios** (nomes como "Gestor Demonstração", telefones como `5551900000000`) e só são criados quando `SEED_DEMONSTRACAO=true`.
+- **O seed pode ser executado várias vezes sem duplicar nem alterar o que já existe.** Cada grupo é conferido pela sua chave natural:
+  - turnos: só são criados num banco sem nenhum turno (depois disso, a grade é do Super Admin);
+  - Super Admin: só é criado se não houver nenhum, para não voltar à senha inicial;
+  - termos: pela versão (`upsert` da versão 1);
+  - setores: pelo `slug`; equipes: pelo setor e pelo nome; gestor: pelo e-mail;
+  - etapas e perguntas: só num setor ainda sem etapas;
+  - escala e atendimentos: as linhas que já existem são ignoradas (`skipDuplicates`);
+  - sessões, respostas e manifestações: só num banco sem nenhuma sessão.
+  A demonstração é pulada, com aviso, se a grade de turnos ativos não for mais a padrão ou se o Super Admin tiver mudado as etapas de um setor de demonstração.
+- **Nunca roda no ambiente de teste** (`NODE_ENV=test`): o banco de teste é apagado e recriado pelos próprios testes. Antes de povoar, o seed mostra o nome do banco que vai usar.
+- **Nenhuma senha fica no código.** A senha do Super Admin vem da variável `SEED_SUPER_ADMIN_SENHA`, e a do gestor de demonstração, de `SEED_DEMONSTRACAO_SENHA`.
+- **Os dados de demonstração são claramente fictícios** (nomes como "Gestor Demonstração", e-mails `@exemplo.com`, manifestações sem telefone) e só são criados quando `SEED_DEMONSTRACAO=true`, o que o seed recusa em produção.
 
 ---
 

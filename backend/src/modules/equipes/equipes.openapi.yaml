@@ -1,5 +1,175 @@
 # Contrato das rotas do módulo equipes, juntado aos demais por src/docs/swagger.js
 tags:
   - name: Equipes
-    description: Cadastro de equipes de cada setor
-paths: {}
+    description: Cadastro das equipes de plantão de cada setor (RF20, D12)
+paths:
+  /api/equipes:
+    get:
+      tags: [Equipes]
+      summary: Lista as equipes de um setor (só Super Admin)
+      description: Ordenadas pelo nome. O setor é obrigatório, porque cada equipe pertence a um setor (D12).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: setorId
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: ativo
+          in: query
+          required: false
+          description: Filtra por equipes ativas (true) ou desativadas (false). Sem o filtro, vêm todas.
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Lista de equipes do setor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Equipe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Setor não encontrado (SETOR_NAO_ENCONTRADO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+    post:
+      tags: [Equipes]
+      summary: Cadastra uma equipe num setor (só Super Admin)
+      description: >
+        O nome não se repete dentro do setor, sem diferenciar maiúsculas nem acentos ("equipe a" e
+        "Équipe A" são o mesmo nome que "Equipe A"); em outro setor, o mesmo nome é aceito (RN13).
+        A equipe nunca muda de setor depois de criada. A criação é registrada no log.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EquipeEntrada'
+            example: { setorId: 1, nome: Equipe C }
+      responses:
+        '201':
+          description: Equipe criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Equipe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '409':
+          description: Já existe uma equipe com esse nome no setor (EQUIPE_JA_EXISTE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '422':
+          description: O setor não existe (SETOR_INEXISTENTE) ou está desativado (SETOR_INATIVO)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+  /api/equipes/{id}:
+    patch:
+      tags: [Equipes]
+      summary: Renomeia, desativa ou reativa uma equipe (só Super Admin)
+      description: >
+        Envie só os campos que mudam. O setor não pode ser alterado (setorId é recusado com 400):
+        para mudar uma equipe de setor, desative-a e cadastre outra no novo setor. Renomear mantém
+        o histórico, porque a escala aponta para a equipe e não para o nome. Equipes nunca são
+        apagadas (D6); desativada, ela não é aceita em novas importações da escala, mas continua
+        nos indicadores. A alteração é registrada no log, com os dados de antes e de depois.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EquipeAlteracao'
+            examples:
+              renomear:
+                summary: Renomear
+                value: { nome: Equipe Azul }
+              desativar:
+                summary: Desativar
+                value: { ativo: false }
+      responses:
+        '200':
+          description: Equipe alterada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Equipe'
+        '400':
+          $ref: '#/components/responses/DadosInvalidos'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          description: Equipe não encontrada (EQUIPE_NAO_ENCONTRADA)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+        '409':
+          description: Já existe uma equipe com esse nome no setor (EQUIPE_JA_EXISTE)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erro'
+components:
+  schemas:
+    Equipe:
+      type: object
+      required: [id, setorId, nome, ativo, criadoEm, atualizadoEm]
+      properties:
+        id: { type: integer, examples: [1] }
+        setorId: { type: integer, examples: [1] }
+        nome: { type: string, examples: [Equipe A] }
+        ativo: { type: boolean, examples: [true] }
+        criadoEm: { type: string, format: date-time }
+        atualizadoEm: { type: string, format: date-time }
+    EquipeEntrada:
+      type: object
+      additionalProperties: false
+      required: [setorId, nome]
+      properties:
+        setorId: { type: integer, minimum: 1 }
+        nome:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: Espaços nas pontas são removidos
+    EquipeAlteracao:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        nome: { type: string, minLength: 1, maxLength: 80 }
+        ativo: { type: boolean }

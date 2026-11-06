@@ -87,7 +87,39 @@ jobs:
       - name: Cria o banco de teste
         run: npx prisma migrate deploy
 
-      # O limite de 60% de cobertura dos services (RNF13) ainda NÃO bloqueia: ele está comentado
-      # no jest.config.js e será ligado na etapa de fechamento (BF), quando os services existirem.
+      # Falha se algum service ficar abaixo de 60% de cobertura (RNF13; limite no jest.config.js)
       - name: Roda os testes com cobertura
         run: npm run test:coverage
+
+  # Nome fixo, pelo mesmo motivo do "backend": é ele que vira verificação obrigatória na proteção
+  # das branches. Se o nome mudar, a proteção passa a esperar uma verificação que nunca roda.
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Baixa o código
+        uses: actions/checkout@v5
+
+      - name: Instala o Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instala as dependências
+        run: npm ci
+
+      - name: Verifica o padrão do código (ESLint)
+        run: npm run lint
+
+      - name: Roda os testes
+        run: npm test
+
+      - name: Gera o pacote de produção
+        run: npm run build
