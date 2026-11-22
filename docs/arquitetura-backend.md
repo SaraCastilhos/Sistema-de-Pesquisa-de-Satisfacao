@@ -443,7 +443,7 @@ A arquitetura atende ao volume esperado com folga (estimativa na seção 7.4 do 
 | Indicadores | Calculados por consulta, com índices | *Views* materializadas atualizadas periodicamente |
 | Banco | Neon gratuito | Plano pago do Neon, que aumenta processamento e armazenamento sem migrar de serviço |
 | Fotos | No banco | Serviço de armazenamento de objetos; a tabela passa a guardar o endereço (seção 5.5 do modelo) |
-| Vários hospitais | Uma instalação por hospital | Coluna de organização nas tabelas principais (modelo *multi-tenant*), assunto do plano de negócios |
+| Vários hospitais | Uma instalação por hospital | Coluna de organização nas tabelas principais (modelo *multi-tenant*), com prazo e custo no [plano de negócios](Plano-de-Negocios.md) (seção 4.3) |
 
 Os limites conhecidos do plano gratuito estão documentados no RNF07 (demora após 15 minutos sem uso) e em `seguranca-e-nuvem.md`.
 

@@ -43,6 +43,7 @@ Hoje o hospital recebe cerca de 3 respostas a cada 500 atendimentos (0,6%). Os f
 | Documento | Conteúdo |
 | --- | --- |
 | [Documento de Requisitos](docs/Documento_de_Requisitos_FHDOD.md) | Requisitos funcionais, não funcionais e regras de negócio |
+| [Plano de Negócios](docs/Plano-de-Negocios.md) | Mercado, modelo SaaS, preços, escalabilidade comercial e projeção financeira |
 | [Padrões de Git](docs/padroes-git.md) | Branches, commits, Pull Requests e versões |
 
 **Backend**
